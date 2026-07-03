@@ -1,0 +1,39 @@
+{
+  "name": "notegen",
+  "version": "0.1.0",
+  "description": "Windows desktop app for AI-assisted note creation on Xiaohongshu and similar platforms",
+  "main": "src/main/index.js",
+  "author": "Wong-F",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "test": "node --test test/**/*.test.js",
+    "build": "node scripts/build.js",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^34.5.8",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.wongf.notegen",
+    "productName": "noteGen",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "prompts/**/*",
+      "writers/**/*",
+      "templates/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

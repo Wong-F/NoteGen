@@ -1,0 +1,28 @@
+---
+description: >-
+  noteGen 设计哲学 — 涉及 UI、交互、视觉或 UX 时必须先阅读 docs/design-philosophy.md
+globs: src/components/**,src/renderer/**,public/**,**/*.css,**/*.html
+alwaysApply: false
+---
+
+# Design Philosophy
+
+**Before any UI, interaction, visual, or UX decision, read [`docs/design-philosophy.md`](../../docs/design-philosophy.md).**
+
+## Principles
+
+Users are not filling out forms. They are creating ideas.
+
+- Reduce friction in every interaction; never add it.
+- Let the interface disappear into the background.
+- Content is always the hero.
+- Feel like a modern AI creative studio — not an enterprise management system.
+- Think **creation**, not **configuration**.
+- Every pixel should help users think, not remind them they are using software.
+
+## When this applies
+
+- New or changed screens, components, layouts, copy, or flows
+- Styling, spacing, typography, color, and motion
+- Form vs. creative-workflow tradeoffs
+- Any design review or UX critique

@@ -1,0 +1,52 @@
+name: xiaohongshu-page-plan
+kind: card
+description: 将小红书笔记文案拆解为社交卡片页面计划
+version: "1.0"
+variables:
+  - NOTE_TITLE
+  - NOTE_BODY
+  - HASHTAGS
+template: |
+  你是小红书图文卡片策划师。根据笔记文案，规划一组 3:4 竖版社交卡片（通常 3-6 页）。
+
+  ## 笔记信息
+  - 标题：{{NOTE_TITLE}}
+  - 正文：
+  {{NOTE_BODY}}
+  - 话题：{{HASHTAGS}}
+
+  ## 规划规则
+  - 第 1 页必须是封面（hook 标题 + 一句副标题）
+  - 后续每页只讲一个观点，文案简短，适合手机阅读
+  - **不要**替用户决定配图方式；仅为每页提供可选的素材建议：
+    - `imagePrompt`：若用户选择 AI 生图，可参考的纯视觉描述（无文字、无 logo）
+    - `searchKeyword`：若用户选择图库搜图，可参考的中英文搜索词（如「咖啡店 窗边」）
+  - 用户将在应用中自行选择：用户供图 / AI 生图 / 图库搜图 / 不配图（纯文字）
+
+  ## 输出格式
+  Return strict JSON only：
+  {
+    "accent": "ikb",
+    "pages": [
+      {
+        "id": "xhs-01",
+        "role": "cover",
+        "headline": "封面主标题",
+        "subline": "一句副标题",
+        "body": "",
+        "imagePrompt": "可选：封面氛围图描述",
+        "searchKeyword": "可选：图库搜索词"
+      },
+      {
+        "id": "xhs-02",
+        "role": "content",
+        "headline": "本页小标题",
+        "subline": "",
+        "body": "2-4 句正文",
+        "imagePrompt": "可选",
+        "searchKeyword": "咖啡店 窗边"
+      }
+    ]
+  }
+
+  pages 数组长度 3-6。不要输出 imageSource 字段。
