@@ -1,0 +1,177 @@
+/**
+ * Mount settings drawer (triggered from header).
+ * @param {HTMLElement} root — app root for overlay placement
+ * @returns {{ open: () => void; close: () => void }}
+ */
+export function mountSettingsPanel(root) {
+  const overlay = document.createElement("div");
+  overlay.className = "settings-overlay";
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="settings-drawer" role="dialog" aria-label="设置">
+      <div class="settings-drawer-header">
+        <h2 class="settings-drawer-title">设置</h2>
+        <button type="button" class="btn-ghost settings-close-btn" aria-label="关闭">✕</button>
+      </div>
+      <div class="settings-drawer-body">
+        <section class="settings-group">
+          <h3 class="settings-group-title">AI 文案服务</h3>
+          <label for="ai-base-url">服务地址</label>
+          <input id="ai-base-url" type="text" placeholder="http://localhost:11434/v1" />
+          <label for="ai-model">模型</label>
+          <input id="ai-model" type="text" list="ai-model-options"
+            placeholder="测试连接后可从列表选择" />
+          <datalist id="ai-model-options"></datalist>
+          <label for="ai-api-key">API Key（本地 Ollama 可留空）</label>
+          <input id="ai-api-key" type="password" placeholder="sk-..." />
+        </section>
+        <section class="settings-group">
+          <h3 class="settings-group-title">图像 API</h3>
+          <label for="image-base-url">服务地址</label>
+          <input id="image-base-url" type="text" placeholder="https://api.openai.com/v1" />
+          <label for="image-model">模型</label>
+          <input id="image-model" type="text" placeholder="dall-e-3" />
+          <label for="image-api-key">API Key</label>
+          <input id="image-api-key" type="password" placeholder="sk-..." />
+        </section>
+        <section class="settings-group">
+          <h3 class="settings-group-title">图库 API</h3>
+          <label for="pexels-api-key">Pexels API Key</label>
+          <input id="pexels-api-key" type="password" placeholder="pexels.com/api" />
+          <label for="unsplash-access-key">Unsplash Access Key</label>
+          <input id="unsplash-access-key" type="password" placeholder="unsplash.com/developers" />
+        </section>
+        <div class="settings-actions">
+          <button id="ai-test-btn" type="button" class="btn-secondary">测试文案连接</button>
+          <button id="stock-test-btn" type="button" class="btn-secondary">测试图库连接</button>
+          <button id="settings-save-btn" type="button" class="btn-primary">保存</button>
+        </div>
+        <p id="settings-status" class="settings-status" aria-live="polite"></p>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const drawer = overlay.querySelector(".settings-drawer");
+  const closeBtn = overlay.querySelector(".settings-close-btn");
+  const baseUrlInput = overlay.querySelector("#ai-base-url");
+  const modelInput = overlay.querySelector("#ai-model");
+  const modelOptions = overlay.querySelector("#ai-model-options");
+  const apiKeyInput = overlay.querySelector("#ai-api-key");
+  const testBtn = overlay.querySelector("#ai-test-btn");
+  const stockTestBtn = overlay.querySelector("#stock-test-btn");
+  const saveBtn = overlay.querySelector("#settings-save-btn");
+  const statusEl = overlay.querySelector("#settings-status");
+
+  function open() {
+    overlay.hidden = false;
+    requestAnimationFrame(() => overlay.classList.add("is-open"));
+    loadSettings();
+  }
+
+  function close() {
+    overlay.classList.remove("is-open");
+    setTimeout(() => {
+      overlay.hidden = true;
+    }, 200);
+  }
+
+  closeBtn.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      close();
+    }
+  });
+
+  async function loadSettings() {
+    try {
+      const settings = await window.noteGen.invoke("settings:get");
+      baseUrlInput.value = settings.ai.baseUrl;
+      modelInput.value = settings.ai.model;
+      apiKeyInput.value = settings.ai.apiKey;
+      overlay.querySelector("#image-base-url").value = settings.image?.baseUrl || "";
+      overlay.querySelector("#image-model").value = settings.image?.model || "";
+      overlay.querySelector("#image-api-key").value = settings.image?.apiKey || "";
+      overlay.querySelector("#pexels-api-key").value = settings.stock?.pexelsApiKey || "";
+      overlay.querySelector("#unsplash-access-key").value = settings.stock?.unsplashAccessKey || "";
+    } catch (error) {
+      statusEl.textContent = `读取设置失败：${error.message}`;
+    }
+  }
+
+  function collectSettings() {
+    return {
+      ai: {
+        baseUrl: baseUrlInput.value.trim(),
+        model: modelInput.value.trim(),
+        apiKey: apiKeyInput.value.trim(),
+      },
+      image: {
+        baseUrl: overlay.querySelector("#image-base-url").value.trim(),
+        model: overlay.querySelector("#image-model").value.trim(),
+        apiKey: overlay.querySelector("#image-api-key").value.trim(),
+      },
+      stock: {
+        pexelsApiKey: overlay.querySelector("#pexels-api-key").value.trim(),
+        unsplashAccessKey: overlay.querySelector("#unsplash-access-key").value.trim(),
+      },
+    };
+  }
+
+  testBtn.addEventListener("click", async () => {
+    statusEl.textContent = "文案服务连接测试中…";
+    try {
+      await window.noteGen.invoke("settings:save", collectSettings());
+      const result = await window.noteGen.invoke("ai:testConnection");
+      if (result.ok) {
+        modelOptions.innerHTML = result.models
+          .map((id) => `<option value="${id}"></option>`)
+          .join("");
+        statusEl.textContent = result.models.length
+          ? `连接成功，发现 ${result.models.length} 个模型`
+          : "连接成功，但无可用模型";
+      } else {
+        statusEl.textContent = `连接失败（${result.code}）：${result.message}`;
+      }
+    } catch (error) {
+      statusEl.textContent = `连接失败：${error.message}`;
+    }
+  });
+
+  stockTestBtn.addEventListener("click", async () => {
+    statusEl.textContent = "图库连接测试中…";
+    try {
+      await window.noteGen.invoke("settings:save", collectSettings());
+      const result = await window.noteGen.invoke("stock:testConnection");
+      if (result.code === "CONFIG") {
+        statusEl.textContent = result.message;
+        return;
+      }
+      const label = { pexels: "Pexels", unsplash: "Unsplash" };
+      const parts = result.providers.map((item) => {
+        const name = label[item.id] || item.id;
+        if (!item.configured) {
+          return `${name}：未配置`;
+        }
+        return item.ok ? `${name}：${item.message}` : `${name} 失败：${item.message}`;
+      });
+      statusEl.textContent = result.ok
+        ? `图库连接成功 — ${parts.join("；")}`
+        : `图库连接失败 — ${parts.join("；")}`;
+    } catch (error) {
+      statusEl.textContent = `图库连接失败：${error.message}`;
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    try {
+      await window.noteGen.invoke("settings:save", collectSettings());
+      statusEl.textContent = "设置已保存";
+    } catch (error) {
+      statusEl.textContent = `保存失败：${error.message}`;
+    }
+  });
+
+  return { open, close };
+}

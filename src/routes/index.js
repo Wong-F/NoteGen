@@ -1,4 +1,4 @@
-const { ipcMain, dialog } = require("electron");
+const { ipcMain, dialog, clipboard, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -88,6 +88,47 @@ function registerRoutes(services) {
 
   ipcMain.handle("cards:render", async (_event, payload) => {
     return services.cardService.renderDeckPng(payload);
+  });
+
+  ipcMain.handle("export:copyText", async (_event, payload) => {
+    const text = services.exportService.formatNoteText(payload?.copy || {});
+    if (!text.trim()) {
+      throw new Error("没有可复制的文案");
+    }
+    clipboard.writeText(text);
+    return { ok: true, charCount: text.length };
+  });
+
+  ipcMain.handle("export:pickFolder", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "选择导出文件夹",
+      buttonLabel: "导出到这里",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || !result.filePaths.length) {
+      return { canceled: true };
+    }
+    return { canceled: false, folderPath: result.filePaths[0] };
+  });
+
+  ipcMain.handle("export:saveToFolder", async (_event, payload) => {
+    const folderPath = payload?.folderPath?.trim();
+    const copy = payload?.copy || {};
+    const images = payload?.images || [];
+    if (!folderPath) {
+      throw new Error("导出目录不能为空");
+    }
+    const result = services.exportService.exportToDirectory(folderPath, copy, images);
+    return { ...result, imageCount: result.imagePaths.length };
+  });
+
+  ipcMain.handle("export:revealFolder", async (_event, payload) => {
+    const folderPath = payload?.folderPath;
+    if (!folderPath) {
+      throw new Error("文件夹路径无效");
+    }
+    await shell.openPath(folderPath);
+    return { ok: true };
   });
 }
 

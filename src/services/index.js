@@ -7,6 +7,7 @@ const { CopyService } = require("./copyService");
 const { ImageService } = require("./imageService");
 const { StockImageService } = require("./stockImageService");
 const { CardService } = require("./cardService");
+const { ExportService } = require("./exportService");
 const path = require("node:path");
 
 /**
@@ -20,6 +21,7 @@ const path = require("node:path");
  * @property {ImageService} imageService
  * @property {StockImageService} stockImageService
  * @property {CardService} cardService
+ * @property {ExportService} exportService
  */
 
 /**
@@ -59,6 +61,7 @@ function createServices({ userDataDir, promptsDir, writersDir, templatesDir, ren
     imageService,
     stockImageService,
     cardService,
+    exportService: new ExportService(),
   };
 }
 
