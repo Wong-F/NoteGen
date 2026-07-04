@@ -41,6 +41,7 @@ app.whenReady().then(() => {
   const services = createServices({
     userDataDir,
     renderDeckFn: renderDeckToPng,
+    isDev: !app.isPackaged,
   });
   registerRoutes(services);
 

@@ -70,3 +70,26 @@
    [Unsplash Developers](https://unsplash.com/developers)）。卡片内不强制署名。
 
 排版渲染（HTML → Electron 截图）仍完全本地。
+
+## 2026-07-04 — Workspace 持久化与登录鉴权
+
+### Workspace 系统
+
+- 替代原 Stage 5「draftStore」设想：以 **Workspace** 为单位持久化完整创作状态（`workspaces/{id}.json`），
+  索引在 `workspaces/index.json`；与 `drafts/{sessionId}/` 资产目录通过 `sessionId` 关联。
+- 自动保存 debounce 300ms；侧边栏支持搜索、切换、inline 改标题、删除。
+- IPC 通道前缀 `workspaces:*`。
+
+### 登录鉴权（AI 密钥分销平台）
+
+- 接口：`POST http://sit.xslq.work/sit/interface/api/publickey/normaltoken`
+- 字段映射：账户=手机号（`phone`），密码=密钥（`secret`）；`script=NoteGen`；`imei`=本地持久化 UUID。
+- 会话存 `userData/auth-session.json`；过期启动时自动用缓存凭证重试激活。
+- 开发后门：`13164150732` 免密，仅 `!app.isPackaged`（`npm run dev`）生效。
+- 设置页「账户」区展示订阅状态 / 能量点 / 到期时间；退出登录清除会话。
+- **待联调**：需后端下发测试密钥；错误码均 `code=500`，靠 `msg` 文案区分。
+
+### 登录页视觉
+
+- 背景图：`public/assets/LoginBackground.png`（全屏 cover + 轻量渐变遮罩 + 毛玻璃登录卡片）。
+

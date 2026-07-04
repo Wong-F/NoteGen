@@ -1,9 +1,10 @@
 /**
  * Mount settings drawer (triggered from header).
  * @param {HTMLElement} root — app root for overlay placement
+ * @param {{ onLogout?: () => void }} [options]
  * @returns {{ open: () => void; close: () => void }}
  */
-export function mountSettingsPanel(root) {
+export function mountSettingsPanel(root, options = {}) {
   const overlay = document.createElement("div");
   overlay.className = "settings-overlay";
   overlay.hidden = true;
@@ -14,6 +15,15 @@ export function mountSettingsPanel(root) {
         <button type="button" class="btn-ghost settings-close-btn" aria-label="关闭">✕</button>
       </div>
       <div class="settings-drawer-body">
+        <section class="settings-group">
+          <h3 class="settings-group-title">账户</h3>
+          <div id="settings-account-card" class="settings-account-card">
+            <p class="settings-account-value">加载中…</p>
+          </div>
+          <button id="settings-logout-btn" type="button" class="btn-secondary settings-logout-btn">
+            退出登录
+          </button>
+        </section>
         <section class="settings-group">
           <h3 class="settings-group-title">AI 文案服务</h3>
           <label for="ai-base-url">服务地址</label>
@@ -55,6 +65,8 @@ export function mountSettingsPanel(root) {
 
   const drawer = overlay.querySelector(".settings-drawer");
   const closeBtn = overlay.querySelector(".settings-close-btn");
+  const accountCard = overlay.querySelector("#settings-account-card");
+  const logoutBtn = overlay.querySelector("#settings-logout-btn");
   const baseUrlInput = overlay.querySelector("#ai-base-url");
   const modelInput = overlay.querySelector("#ai-model");
   const modelOptions = overlay.querySelector("#ai-model-options");
@@ -63,6 +75,42 @@ export function mountSettingsPanel(root) {
   const stockTestBtn = overlay.querySelector("#stock-test-btn");
   const saveBtn = overlay.querySelector("#settings-save-btn");
   const statusEl = overlay.querySelector("#settings-status");
+
+  function renderAccountCard(profile) {
+    if (!profile) {
+      accountCard.innerHTML = `<p class="settings-account-value">未登录</p>`;
+      logoutBtn.hidden = true;
+      return;
+    }
+
+    const statusClass = profile.subscriptionStatus === "active" ? "is-active" : "is-expired";
+    accountCard.innerHTML = `
+      <div class="settings-account-row">
+        <span class="settings-account-label">账户</span>
+        <span class="settings-account-value">${profile.phone}</span>
+      </div>
+      <div class="settings-account-row">
+        <span class="settings-account-label">订阅状态</span>
+        <span class="settings-account-value">
+          <span class="settings-account-status ${statusClass}">${profile.subscriptionLabel}</span>
+        </span>
+      </div>
+      <div class="settings-account-row">
+        <span class="settings-account-label">AI 能量点</span>
+        <span class="settings-account-value">${profile.aipoint}</span>
+      </div>
+      <div class="settings-account-row">
+        <span class="settings-account-label">激活时间</span>
+        <span class="settings-account-value">${profile.activeDate || "—"}</span>
+      </div>
+      <div class="settings-account-row">
+        <span class="settings-account-label">到期时间</span>
+        <span class="settings-account-value">${profile.expireDate || "—"}</span>
+      </div>
+      ${profile.devBypass ? `<div class="settings-account-row"><span class="settings-account-label">模式</span><span class="settings-account-value">开发后门</span></div>` : ""}
+    `;
+    logoutBtn.hidden = false;
+  }
 
   function open() {
     overlay.hidden = false;
@@ -84,9 +132,25 @@ export function mountSettingsPanel(root) {
     }
   });
 
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      await window.noteGen.invoke("auth:logout");
+      close();
+      options.onLogout?.();
+    } catch (error) {
+      statusEl.textContent = `退出失败：${error.message}`;
+    }
+  });
+
   async function loadSettings() {
     try {
-      const settings = await window.noteGen.invoke("settings:get");
+      const [settings, authResult] = await Promise.all([
+        window.noteGen.invoke("settings:get"),
+        window.noteGen.invoke("auth:session"),
+      ]);
+
+      renderAccountCard(authResult?.profile || null);
+
       baseUrlInput.value = settings.ai.baseUrl;
       modelInput.value = settings.ai.model;
       apiKeyInput.value = settings.ai.apiKey;

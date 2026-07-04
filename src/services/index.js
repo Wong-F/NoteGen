@@ -8,6 +8,8 @@ const { ImageService } = require("./imageService");
 const { StockImageService } = require("./stockImageService");
 const { CardService } = require("./cardService");
 const { ExportService } = require("./exportService");
+const { WorkspaceStoreService } = require("./workspaceStoreService");
+const { AuthService } = require("./authService");
 const path = require("node:path");
 
 /**
@@ -22,14 +24,16 @@ const path = require("node:path");
  * @property {StockImageService} stockImageService
  * @property {CardService} cardService
  * @property {ExportService} exportService
+ * @property {WorkspaceStoreService} workspaceStoreService
+ * @property {AuthService} authService
  */
 
 /**
  * Create and wire application services.
- * @param {{ userDataDir: string; promptsDir?: string; writersDir?: string; templatesDir?: string; renderDeckFn?: Function }} options
+ * @param {{ userDataDir: string; promptsDir?: string; writersDir?: string; templatesDir?: string; renderDeckFn?: Function; isDev?: boolean }} options
  * @returns {Services}
  */
-function createServices({ userDataDir, promptsDir, writersDir, templatesDir, renderDeckFn }) {
+function createServices({ userDataDir, promptsDir, writersDir, templatesDir, renderDeckFn, isDev }) {
   const settingsService = new SettingsService(userDataDir);
   const getSettings = () => settingsService.get();
   const aiService = new AiService(() => getSettings().ai);
@@ -62,6 +66,8 @@ function createServices({ userDataDir, promptsDir, writersDir, templatesDir, ren
     stockImageService,
     cardService,
     exportService: new ExportService(),
+    workspaceStoreService: new WorkspaceStoreService(userDataDir),
+    authService: new AuthService(userDataDir, { isDev }),
   };
 }
 

@@ -1,0 +1,271 @@
+/**
+ * Key activation auth against the AI key distribution platform.
+ * Persists session locally; retries activation when cached credentials expire.
+ */
+
+const fs = require("node:fs");
+const path = require("node:path");
+const { randomUUID } = require("node:crypto");
+
+const API_BASE = "http://sit.xslq.work/sit/interface/api";
+const ACTIVATE_PATH = "/publickey/normaltoken";
+const SCRIPT_TYPE = "NoteGen";
+const DEV_BYPASS_PHONE = "13164150732";
+
+/** @type {Record<string, string>} */
+const ERROR_MSG_MAP = {
+  "未能获取手机、脚本基础信息,请确认": "请填写完整信息",
+  密钥非法: "密钥无效",
+  "脚本类型错误,请核对": "脚本类型不匹配",
+  绑定的手机号不一致: "请使用绑定时的手机号",
+  该激活码已在其它设备绑定: "请到原设备使用，或联系客服解绑",
+  "已过期,请续期": "密钥已过期，请联系管理员续期",
+};
+
+/**
+ * @typedef {Object} AuthSession
+ * @property {string} phone
+ * @property {string} secret
+ * @property {string} script
+ * @property {string} imei
+ * @property {number} aipoint
+ * @property {string} activeDate
+ * @property {string} expireDate
+ * @property {string} loggedInAt
+ * @property {boolean} [devBypass]
+ */
+
+class AuthService {
+  /**
+   * @param {string} userDataDir
+   * @param {{ isDev?: boolean; fetchFn?: typeof fetch }} [options]
+   */
+  constructor(userDataDir, options = {}) {
+    this.userDataDir = userDataDir;
+    this.isDev = Boolean(options.isDev);
+    this.fetchFn = options.fetchFn || fetch;
+    this.sessionPath = path.join(userDataDir, "auth-session.json");
+    this.deviceIdPath = path.join(userDataDir, "device-id.json");
+  }
+
+  /** @returns {string} */
+  getDeviceId() {
+    try {
+      const stored = JSON.parse(fs.readFileSync(this.deviceIdPath, "utf8"));
+      if (stored?.id?.trim()) {
+        return stored.id.trim();
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.warn(`[noteGen] failed to read device id: ${error.message}`);
+      }
+    }
+
+    const id = randomUUID();
+    fs.mkdirSync(this.userDataDir, { recursive: true });
+    fs.writeFileSync(this.deviceIdPath, JSON.stringify({ id }, null, 2), "utf8");
+    return id;
+  }
+
+  /**
+   * @param {string} msg
+   * @returns {string}
+   */
+  mapErrorMessage(msg) {
+    const trimmed = String(msg || "").trim();
+    return ERROR_MSG_MAP[trimmed] || trimmed || "登录失败，请稍后重试";
+  }
+
+  /**
+   * @param {string} expireDate
+   * @returns {boolean}
+   */
+  isExpired(expireDate) {
+    const parsed = Date.parse(String(expireDate || "").replace(" ", "T"));
+    if (Number.isNaN(parsed)) {
+      return true;
+    }
+    return parsed <= Date.now();
+  }
+
+  /** @returns {AuthSession | null} */
+  readStoredSession() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.sessionPath, "utf8"));
+      if (!raw?.phone) {
+        return null;
+      }
+      return raw;
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.warn(`[noteGen] failed to read auth session: ${error.message}`);
+      }
+      return null;
+    }
+  }
+
+  /** @param {AuthSession} session */
+  writeSession(session) {
+    fs.mkdirSync(this.userDataDir, { recursive: true });
+    fs.writeFileSync(this.sessionPath, JSON.stringify(session, null, 2), "utf8");
+  }
+
+  clearSession() {
+    try {
+      fs.unlinkSync(this.sessionPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.warn(`[noteGen] failed to clear auth session: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * @param {string} phone
+   * @param {string} secret
+   * @returns {Promise<{ ok: true; session: AuthSession } | { ok: false; error: string }>}
+   */
+  async activate(phone, secret) {
+    const normalizedPhone = String(phone || "").trim();
+    const normalizedSecret = String(secret || "").trim();
+
+    if (this.isDev && normalizedPhone === DEV_BYPASS_PHONE) {
+      const now = new Date();
+      const expire = new Date(now);
+      expire.setFullYear(expire.getFullYear() + 1);
+      const format = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+
+      const session = {
+        phone: normalizedPhone,
+        secret: normalizedSecret || "dev-bypass",
+        script: SCRIPT_TYPE,
+        imei: this.getDeviceId(),
+        aipoint: 99999,
+        activeDate: format(now),
+        expireDate: format(expire),
+        loggedInAt: now.toISOString(),
+        devBypass: true,
+      };
+      this.writeSession(session);
+      return { ok: true, session };
+    }
+
+    if (!normalizedPhone || !normalizedSecret) {
+      return { ok: false, error: "请填写完整信息" };
+    }
+
+    const imei = this.getDeviceId();
+    let response;
+    try {
+      response = await this.fetchFn(`${API_BASE}${ACTIVATE_PATH}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: normalizedPhone,
+          secret: normalizedSecret,
+          imei,
+          script: SCRIPT_TYPE,
+        }),
+      });
+    } catch (error) {
+      return { ok: false, error: `网络连接失败：${error.message}` };
+    }
+
+    let body;
+    try {
+      body = await response.json();
+    } catch {
+      return { ok: false, error: "服务器响应异常，请稍后重试" };
+    }
+
+    if (body?.code !== 200 || !body?.data) {
+      return { ok: false, error: this.mapErrorMessage(body?.msg) };
+    }
+
+    const session = {
+      phone: body.data.phone || normalizedPhone,
+      secret: body.data.secret || normalizedSecret,
+      script: body.data.script || SCRIPT_TYPE,
+      imei: body.data.imei || imei,
+      aipoint: Number(body.data.aipoint) || 0,
+      activeDate: body.data.activeDate || "",
+      expireDate: body.data.expireDate || "",
+      loggedInAt: new Date().toISOString(),
+      devBypass: false,
+    };
+    this.writeSession(session);
+    return { ok: true, session };
+  }
+
+  /**
+   * @param {{ phone: string; secret: string }} payload
+   * @returns {Promise<{ ok: true; session: AuthSession } | { ok: false; error: string }>}
+   */
+  async login(payload) {
+    return this.activate(payload?.phone, payload?.secret);
+  }
+
+  /**
+   * Returns a valid session, re-activating with cached credentials when expired.
+   * @returns {Promise<{ session: AuthSession | null; renewed?: boolean; error?: string }>}
+   */
+  async getSession() {
+    const stored = this.readStoredSession();
+    if (!stored) {
+      return { session: null };
+    }
+
+    if (!this.isExpired(stored.expireDate)) {
+      return { session: stored };
+    }
+
+    if (!stored.phone || !stored.secret) {
+      this.clearSession();
+      return { session: null, error: "会话已过期，请重新登录" };
+    }
+
+    const result = await this.activate(stored.phone, stored.secret);
+    if (!result.ok) {
+      this.clearSession();
+      return { session: null, error: result.error };
+    }
+    return { session: result.session, renewed: true };
+  }
+
+  /** @returns {{ ok: true }} */
+  logout() {
+    this.clearSession();
+    return { ok: true };
+  }
+
+  /**
+   * Public profile summary for settings UI.
+   * @param {AuthSession | null} session
+   */
+  toUserProfile(session) {
+    if (!session) {
+      return null;
+    }
+
+    const expired = this.isExpired(session.expireDate);
+    return {
+      phone: session.phone,
+      aipoint: session.aipoint,
+      script: session.script,
+      activeDate: session.activeDate,
+      expireDate: session.expireDate,
+      subscriptionStatus: expired ? "expired" : "active",
+      subscriptionLabel: expired ? "已过期" : "有效",
+      devBypass: Boolean(session.devBypass),
+    };
+  }
+}
+
+module.exports = {
+  AuthService,
+  API_BASE,
+  SCRIPT_TYPE,
+  DEV_BYPASS_PHONE,
+  ERROR_MSG_MAP,
+};

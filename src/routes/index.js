@@ -11,6 +11,24 @@ function registerRoutes(services) {
     return services.healthService.ping();
   });
 
+  ipcMain.handle("auth:login", async (_event, payload) => {
+    return services.authService.login(payload || {});
+  });
+
+  ipcMain.handle("auth:session", async () => {
+    const result = await services.authService.getSession();
+    return {
+      session: result.session,
+      profile: services.authService.toUserProfile(result.session),
+      renewed: Boolean(result.renewed),
+      error: result.error || null,
+    };
+  });
+
+  ipcMain.handle("auth:logout", async () => {
+    return services.authService.logout();
+  });
+
   ipcMain.handle("notes:generate", async (_event, payload) => {
     return services.noteService.generate(payload);
   });
@@ -129,6 +147,45 @@ function registerRoutes(services) {
     }
     await shell.openPath(folderPath);
     return { ok: true };
+  });
+
+  ipcMain.handle("workspaces:list", async (_event, payload) => {
+    return services.workspaceStoreService.list(payload || {});
+  });
+
+  ipcMain.handle("workspaces:get", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("workspace id is required");
+    }
+    return services.workspaceStoreService.get(id);
+  });
+
+  ipcMain.handle("workspaces:create", async (_event, payload) => {
+    return services.workspaceStoreService.create(payload || {});
+  });
+
+  ipcMain.handle("workspaces:save", async (_event, payload) => {
+    if (!payload?.id) {
+      throw new Error("workspace id is required");
+    }
+    return services.workspaceStoreService.save(payload);
+  });
+
+  ipcMain.handle("workspaces:delete", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("workspace id is required");
+    }
+    return services.workspaceStoreService.delete(id);
+  });
+
+  ipcMain.handle("workspaces:setActive", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("workspace id is required");
+    }
+    return services.workspaceStoreService.setActive(id);
   });
 }
 

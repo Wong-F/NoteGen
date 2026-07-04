@@ -6,6 +6,7 @@ import {
   setActiveSection,
   notify,
 } from "./appState.js";
+import { saveWorkspaceNow } from "./workspaceStore.js";
 import { escapeHtml, escapeAttr } from "./utils.js";
 
 /**
@@ -27,11 +28,22 @@ export function mountWorkspace(root) {
     }
   });
 
+  document.addEventListener("workspace:activated", () => {
+    lastSection = appState.activeSection;
+    renderSection(inner);
+  });
+
   renderSection(inner);
 }
 
 /** @param {HTMLElement} inner */
 function renderSection(inner) {
+  if (!appState.workspaceReady) {
+    inner.hidden = true;
+    return;
+  }
+  inner.hidden = false;
+
   const section = appState.activeSection;
   inner.className = `workspace-inner workspace-section-${section}`;
   inner.classList.add("workspace-fade");
@@ -52,6 +64,7 @@ function renderSection(inner) {
 
 function getIdeaHtml() {
   const topic = appState.selectedTopic;
+  const input = appState.ideaInput;
   return `
     <div class="workspace-header">
       <h2 class="workspace-title">选题</h2>
@@ -59,20 +72,22 @@ function getIdeaHtml() {
     </div>
     <div class="workspace-fields">
       <input id="keywords-input" type="text" class="field-borderless"
-        placeholder="领域 / 关键词，例如：周末咖啡店探店、职场效率" />
+        placeholder="领域 / 关键词，例如：周末咖啡店探店、职场效率"
+        value="${escapeAttr(input.keywords)}" />
       <input id="target-reader-input" type="text" class="field-borderless field-secondary"
-        placeholder="目标读者（可选），例如：25-35 岁上班族" />
+        placeholder="目标读者（可选），例如：25-35 岁上班族"
+        value="${escapeAttr(input.targetReader)}" />
       <div class="field-row">
         <select id="hook-level-select" class="field-select">
-          <option value="1">钩子 Level 1 · 克制可信</option>
-          <option value="2">钩子 Level 2 · 抓人有对比</option>
-          <option value="3">钩子 Level 3 · 高张力</option>
+          <option value="1" ${input.hookLevel === 1 ? "selected" : ""}>钩子 Level 1 · 克制可信</option>
+          <option value="2" ${input.hookLevel === 2 ? "selected" : ""}>钩子 Level 2 · 抓人有对比</option>
+          <option value="3" ${input.hookLevel === 3 ? "selected" : ""}>钩子 Level 3 · 高张力</option>
         </select>
         <button id="topics-suggest-btn" type="button" class="btn-primary">生成选题</button>
       </div>
     </div>
     <p id="topic-status" class="workspace-status" aria-live="polite"></p>
-    <div id="topic-list" class="topic-list" hidden></div>
+    <div id="topic-list" class="topic-list" ${appState.generatedTopics.length ? "" : "hidden"}></div>
     ${
       topic
         ? `<div class="workspace-selected">
@@ -156,6 +171,23 @@ function bindIdeaEvents(root) {
   const statusEl = root.querySelector("#topic-status");
   const topicList = root.querySelector("#topic-list");
 
+  const syncIdeaInput = () => {
+    appState.ideaInput = {
+      keywords: keywordsInput.value,
+      targetReader: targetReaderInput?.value || "",
+      hookLevel: Number(hookLevelSelect?.value || 2),
+    };
+    notify();
+  };
+
+  keywordsInput.addEventListener("input", syncIdeaInput);
+  targetReaderInput?.addEventListener("input", syncIdeaInput);
+  hookLevelSelect?.addEventListener("change", syncIdeaInput);
+
+  if (appState.generatedTopics.length && topicList) {
+    renderTopicList(topicList, { topics: appState.generatedTopics }, statusEl, true);
+  }
+
   suggestBtn.addEventListener("click", async () => {
     if (!window.noteGen?.invoke) {
       statusEl.textContent = "请通过 Electron 启动应用（npm run dev）";
@@ -182,8 +214,10 @@ function bindIdeaEvents(root) {
       });
 
       renderTopicList(topicList, result, statusEl);
+      appState.generatedTopics = result.topics;
       const summary = result.domainSummary ? ` · ${result.domainSummary}` : "";
       statusEl.textContent = `已生成 ${result.topics.length} 个选题${summary}`;
+      saveWorkspaceNow();
     } catch (error) {
       statusEl.textContent = `选题生成失败：${error.message}`;
     } finally {
@@ -197,12 +231,13 @@ function bindIdeaEvents(root) {
  * @param {HTMLElement} topicList
  * @param {object} result
  * @param {HTMLElement} statusEl
+ * @param {boolean} [restoreOnly]
  */
-function renderTopicList(topicList, result, statusEl) {
+function renderTopicList(topicList, result, statusEl, restoreOnly = false) {
   topicList.innerHTML = result.topics
     .map(
       (topic) => `
-      <button type="button" class="topic-item" data-topic-id="${topic.id}">
+      <button type="button" class="topic-item${appState.selectedTopic?.id === topic.id ? " is-selected" : ""}" data-topic-id="${topic.id}">
         <span class="topic-item-rank">#${topic.rank}</span>
         <span class="topic-item-title">${escapeHtml(topic.title)}</span>
         <span class="topic-item-angle">${escapeHtml(topic.angle)}</span>
@@ -222,7 +257,7 @@ function renderTopicList(topicList, result, statusEl) {
       topicList.querySelectorAll(".topic-item").forEach((el) => {
         el.classList.toggle("is-selected", el.getAttribute("data-topic-id") === id);
       });
-      onTopicSelected(topic, statusEl);
+      onTopicSelected(topic, statusEl, restoreOnly);
     });
   });
 }
@@ -230,20 +265,26 @@ function renderTopicList(topicList, result, statusEl) {
 /**
  * @param {object} topic
  * @param {HTMLElement} statusEl
+ * @param {boolean} [skipNavigate]
  */
-function onTopicSelected(topic, statusEl) {
+function onTopicSelected(topic, statusEl, skipNavigate = false) {
   appState.selectedTopic = topic;
-  appState.copyDraft = null;
-  appState.pagePlan = null;
-  appState.pageAssets = {};
-  appState.renderedImages = [];
-  appState.completedSections.delete("writing");
-  appState.completedSections.delete("images");
+  if (!skipNavigate) {
+    appState.copyDraft = null;
+    appState.pagePlan = null;
+    appState.pageAssets = {};
+    appState.renderedImages = [];
+    appState.completedSections.delete("writing");
+    appState.completedSections.delete("images");
+  }
 
   markSectionDone("idea");
-  statusEl.textContent = "已选择选题，切换到文案开始写作";
-  setActiveSection("writing");
+  if (!skipNavigate) {
+    statusEl.textContent = "已选择选题，切换到文案开始写作";
+    setActiveSection("writing");
+  }
   notify();
+  saveWorkspaceNow();
 }
 
 /** @param {HTMLElement} root */
@@ -280,6 +321,7 @@ function bindWritingEvents(root) {
         targetReader: topic.targetReader,
         styleId: styleSelect.value,
       });
+      appState.styleId = styleSelect.value;
       showCopy(result, titleInput, bodyInput, hashtagsInput, humanizeBtn, statusEl);
     } catch (error) {
       statusEl.textContent = `文案生成失败：${error.message}`;
@@ -308,6 +350,7 @@ function bindWritingEvents(root) {
       }
       statusEl.textContent = "正文已重写，更像真人博主";
       notify();
+      saveWorkspaceNow();
     } catch (error) {
       statusEl.textContent = `去 AI 味失败：${error.message}`;
     } finally {
@@ -337,9 +380,16 @@ async function loadStyles(styleSelect, statusEl) {
     styleSelect.innerHTML = styles
       .map(
         (style) =>
-          `<option value="${escapeHtml(style.id)}">${escapeHtml(style.name)}</option>`
+          `<option value="${escapeHtml(style.id)}"${appState.styleId === style.id ? " selected" : ""}>${escapeHtml(style.name)}</option>`
       )
       .join("");
+    if (!appState.styleId && styles.length) {
+      appState.styleId = styles[0].id;
+    }
+    styleSelect.addEventListener("change", () => {
+      appState.styleId = styleSelect.value;
+      notify();
+    });
   } catch (error) {
     statusEl.textContent = `加载写作风格失败：${error.message}`;
   }
@@ -368,6 +418,7 @@ function showCopy(copy, titleInput, bodyInput, hashtagsInput, humanizeBtn, statu
   markSectionDone("writing");
   statusEl.textContent = "文案已生成，可直接编辑";
   notify();
+  saveWorkspaceNow();
 }
 
 function syncCopyFromEditor() {
@@ -414,6 +465,7 @@ function bindImagesEvents(root) {
       appState.pagePlan = plan;
       renderPagePlan(planList, renderBtn, statusEl);
       statusEl.textContent = `已规划 ${plan.pages.length} 页，请为需要素材的页面配图`;
+      saveWorkspaceNow();
     } catch (error) {
       statusEl.textContent = `规划失败：${error.message}`;
     } finally {
@@ -449,6 +501,7 @@ function bindImagesEvents(root) {
         markSectionDone("images");
         statusEl.textContent = `已生成 ${result.images.length} 张卡片`;
         notify();
+        saveWorkspaceNow();
       } catch (error) {
         statusEl.textContent = `渲染失败：${error.message}`;
       } finally {
