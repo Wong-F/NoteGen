@@ -7,6 +7,9 @@ import {
   deriveWorkspaceTitle,
   notify,
 } from "./appState.js";
+import { getActivePersona, applyPersonaDefaultsToWorkspace } from "./personaStore.js";
+import { getDefaultIdeaInput } from "../constants/formDefaults.js";
+import { maybeStartFirstWorkspaceTour } from "./onboardingTour.js";
 
 /** @type {ReturnType<typeof setTimeout> | null} */
 let saveTimer = null;
@@ -164,18 +167,34 @@ export async function flushWorkspaceSave() {
 }
 
 /**
+ * @param {{ usePersona?: boolean }} [options]
  * @returns {Promise<{ id: string }>}
  */
-export async function createWorkspace() {
+export async function createWorkspace(options = {}) {
   if (!window.noteGen?.invoke) {
     throw new Error("Electron IPC unavailable");
   }
 
+  const usePersona = Boolean(options.usePersona);
+  if (usePersona && !appState.activePersonaId) {
+    throw new Error("请先选择运营人设");
+  }
+
   await flushWorkspaceSave();
 
-  const created = await window.noteGen.invoke("workspaces:create", {});
+  const created = await window.noteGen.invoke("workspaces:create", {
+    personaId: usePersona ? appState.activePersonaId : null,
+  });
   activateWorkspaceState(created);
+  if (usePersona) {
+    applyPersonaDefaultsToWorkspace();
+  } else {
+    appState.ideaInput = getDefaultIdeaInput(appState.workflowType);
+  }
+  notify();
+  scheduleSave(true);
   await refreshWorkspaceList();
+  maybeStartFirstWorkspaceTour();
   return { id: created.id };
 }
 
@@ -271,6 +290,27 @@ export async function refreshWorkspaceList() {
   workspaceIndex = result.workspaces || [];
   document.dispatchEvent(new CustomEvent("workspace:list-updated"));
   return workspaceIndex;
+}
+
+/**
+ * Rebind active workspace to a persona, or null to unbind.
+ * @param {string | null} personaId
+ */
+export async function rebindActiveWorkspacePersona(personaId) {
+  if (!appState.activeWorkspaceId || !window.noteGen?.invoke) {
+    return;
+  }
+  await flushWorkspaceSave();
+  const rebound = await window.noteGen.invoke("workspaces:rebindPersona", {
+    id: appState.activeWorkspaceId,
+    personaId,
+  });
+  appState.personaId = rebound.personaId;
+  if (rebound.workflowType) {
+    appState.workflowType = rebound.workflowType;
+  }
+  await refreshWorkspaceList();
+  notify();
 }
 
 /** Mark AI generation complete — save immediately. */

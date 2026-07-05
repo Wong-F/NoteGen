@@ -28,7 +28,11 @@ import {
 
   refreshWorkspaceList,
 
+  rebindActiveWorkspacePersona,
+
 } from "./workspaceStore.js";
+
+import { getPersonaSidebarLabel } from "./personaPanel.js";
 
 import { escapeHtml, escapeAttr } from "./utils.js";
 
@@ -64,13 +68,31 @@ let filteredWorkspaces = [];
 
  * @param {HTMLElement} root
 
+ * @param {{ openPersonaPanel?: () => void }} [options]
+
  */
 
-export function mountSidebar(root) {
+export function mountSidebar(root, options = {}) {
 
   root.innerHTML = `
 
     <nav class="sidebar-nav" aria-label="创作导航">
+
+      <section class="sidebar-section sidebar-persona-section">
+
+        <p class="sidebar-heading">运营人设</p>
+
+        <button type="button" id="persona-selector-btn" class="persona-selector-btn">
+
+          <span id="persona-selector-label" class="persona-selector-label">加载中…</span>
+
+          <span class="persona-selector-chevron" aria-hidden="true">▾</span>
+
+        </button>
+
+      </section>
+
+
 
       <section class="sidebar-section">
 
@@ -82,11 +104,17 @@ export function mountSidebar(root) {
 
         <button type="button" id="new-workspace-btn" class="sidebar-new-btn">+ New Workspace</button>
 
+        <button type="button" id="new-workspace-persona-btn" class="sidebar-new-persona-btn" hidden>
+
+          + 用人设新建
+
+        </button>
+
       </section>
 
 
 
-      <section class="sidebar-section">
+      <section class="sidebar-section" id="sidebar-recent-section">
 
         <p class="sidebar-heading">Recent</p>
 
@@ -99,6 +127,24 @@ export function mountSidebar(root) {
       <section class="sidebar-section sidebar-workflow" id="workflow-section" hidden>
 
         <p class="sidebar-heading">Current Workflow</p>
+
+        <button type="button" id="workspace-bind-btn" class="sidebar-rebind-btn" hidden>
+
+          绑定当前运营人设
+
+        </button>
+
+        <button type="button" id="workspace-rebind-btn" class="sidebar-rebind-btn" hidden>
+
+          改绑到当前运营人设
+
+        </button>
+
+        <button type="button" id="workspace-unbind-btn" class="sidebar-rebind-btn" hidden>
+
+          解除人设绑定
+
+        </button>
 
         <ul class="sidebar-list" id="sidebar-list"></ul>
 
@@ -113,6 +159,18 @@ export function mountSidebar(root) {
   const searchInput = root.querySelector("#workspace-search");
 
   const newBtn = root.querySelector("#new-workspace-btn");
+
+  const newPersonaBtn = root.querySelector("#new-workspace-persona-btn");
+
+  const personaBtn = root.querySelector("#persona-selector-btn");
+
+  const personaLabel = root.querySelector("#persona-selector-label");
+
+  const bindBtn = root.querySelector("#workspace-bind-btn");
+
+  const rebindBtn = root.querySelector("#workspace-rebind-btn");
+
+  const unbindBtn = root.querySelector("#workspace-unbind-btn");
 
   const workspaceList = root.querySelector("#workspace-list");
 
@@ -156,7 +214,77 @@ export function mountSidebar(root) {
 
 
 
+  newPersonaBtn.addEventListener("click", async () => {
+
+    await createWorkspace({ usePersona: true });
+
+    searchInput.value = "";
+
+    searchQuery = "";
+
+    filteredWorkspaces = getWorkspaceIndex();
+
+  });
+
+
+
+  personaBtn.addEventListener("click", () => {
+
+    options.openPersonaPanel?.();
+
+  });
+
+
+
+  bindBtn.addEventListener("click", async () => {
+
+    if (!appState.activePersonaId) {
+
+      return;
+
+    }
+
+    await rebindActiveWorkspacePersona(appState.activePersonaId);
+
+  });
+
+
+
+  rebindBtn.addEventListener("click", async () => {
+
+    if (!appState.activePersonaId) {
+
+      return;
+
+    }
+
+    await rebindActiveWorkspacePersona(appState.activePersonaId);
+
+  });
+
+
+
+  unbindBtn.addEventListener("click", async () => {
+
+    await rebindActiveWorkspacePersona(null);
+
+  });
+
+
+
+  function renderPersonaChip() {
+
+    personaLabel.textContent = getPersonaSidebarLabel();
+
+    newPersonaBtn.hidden = !appState.activePersonaId;
+
+  }
+
+
+
   function render() {
+
+    renderPersonaChip();
 
     if (!searchQuery.trim()) {
 
@@ -166,7 +294,7 @@ export function mountSidebar(root) {
 
     renderWorkspaceList(workspaceList);
 
-    renderWorkflow(workflowList, workflowSection);
+    renderWorkflow(workflowList, workflowSection, { bindBtn, rebindBtn, unbindBtn });
 
   }
 
@@ -188,8 +316,11 @@ export function mountSidebar(root) {
       filteredWorkspaces = getWorkspaceIndex();
     }
     renderWorkspaceList(workspaceList);
-    renderWorkflow(workflowList, workflowSection);
+    renderWorkflow(workflowList, workflowSection, { bindBtn, rebindBtn, unbindBtn });
   });
+
+  document.addEventListener("persona:activated", render);
+  document.addEventListener("persona:empty", render);
 }
 
 
@@ -431,9 +562,13 @@ function startTitleEdit(btn, id) {
 
  * @param {HTMLElement} sectionEl
 
+ * @param {{ bindBtn?: HTMLButtonElement; rebindBtn?: HTMLButtonElement; unbindBtn?: HTMLButtonElement }} [personaActions]
+
  */
 
-function renderWorkflow(listEl, sectionEl) {
+function renderWorkflow(listEl, sectionEl, personaActions = {}) {
+
+  const { bindBtn, rebindBtn, unbindBtn } = personaActions;
 
   const show = appState.workspaceReady;
 
@@ -442,6 +577,36 @@ function renderWorkflow(listEl, sectionEl) {
   if (!show) {
 
     return;
+
+  }
+
+
+
+  const boundPersonaId = appState.personaId;
+
+  const contextPersonaId = appState.activePersonaId;
+
+
+
+  if (bindBtn) {
+
+    bindBtn.hidden = !(contextPersonaId && !boundPersonaId);
+
+  }
+
+  if (rebindBtn) {
+
+    rebindBtn.hidden = !(
+
+      contextPersonaId && boundPersonaId && boundPersonaId !== contextPersonaId
+
+    );
+
+  }
+
+  if (unbindBtn) {
+
+    unbindBtn.hidden = !boundPersonaId;
 
   }
 

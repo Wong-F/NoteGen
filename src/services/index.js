@@ -9,7 +9,9 @@ const { StockImageService } = require("./stockImageService");
 const { CardService } = require("./cardService");
 const { ExportService } = require("./exportService");
 const { WorkspaceStoreService } = require("./workspaceStoreService");
+const { PersonaStoreService } = require("./personaStoreService");
 const { AuthService } = require("./authService");
+const { OnboardingService } = require("./onboardingService");
 const path = require("node:path");
 
 /**
@@ -25,7 +27,9 @@ const path = require("node:path");
  * @property {CardService} cardService
  * @property {ExportService} exportService
  * @property {WorkspaceStoreService} workspaceStoreService
+ * @property {PersonaStoreService} personaStoreService
  * @property {AuthService} authService
+ * @property {OnboardingService} onboardingService
  */
 
 /**
@@ -67,7 +71,9 @@ function createServices({ userDataDir, promptsDir, writersDir, templatesDir, ren
     cardService,
     exportService: new ExportService(),
     workspaceStoreService: new WorkspaceStoreService(userDataDir),
+    personaStoreService: new PersonaStoreService(userDataDir),
     authService: new AuthService(userDataDir, { isDev }),
+    onboardingService: new OnboardingService(userDataDir),
   };
 }
 

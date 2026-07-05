@@ -53,6 +53,28 @@ describe("TopicService", () => {
     assert.match(messages[1].content, /punchy/);
   });
 
+  it("buildMessages appends persona block when workspace is bound", () => {
+    const service = new TopicService(mockAi, {
+      promptCatalog: new PromptCatalog(require("node:path").join(__dirname, "../prompts")),
+    });
+
+    const messages = service.buildMessages({
+      keywords: "AI办公",
+      hookLevel: 2,
+      persona: {
+        name: "职场干货姐",
+        platform: "xiaohongshu",
+        targetReader: "白领",
+        voiceSummary: "干脆专业",
+        taboos: ["震惊体"],
+      },
+    });
+
+    assert.match(messages[1].content, /运营人设约束/);
+    assert.match(messages[1].content, /职场干货姐/);
+    assert.match(messages[1].content, /震惊体/);
+  });
+
   it("suggest returns normalized topic list from mock LLM", async () => {
     const service = new TopicService(mockAi, {
       promptCatalog: new PromptCatalog(require("node:path").join(__dirname, "../prompts")),

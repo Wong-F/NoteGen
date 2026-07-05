@@ -9,6 +9,176 @@ import {
 import { saveWorkspaceNow } from "./workspaceStore.js";
 import { escapeHtml, escapeAttr } from "./utils.js";
 
+/** @returns {{ personaId?: string; workflowType: string }} */
+function workspacePipelinePayload() {
+  return {
+    ...(appState.personaId ? { personaId: appState.personaId } : {}),
+    workflowType: appState.workflowType || "xiaohongshu-note",
+  };
+}
+
+function isWechatArticle() {
+  return appState.workflowType === "wechat-article";
+}
+
+/** @returns {Array<{ heading: string; content: string }>} */
+function readSectionsFromDom() {
+  const list = document.querySelector("#copy-sections-list");
+  if (!list) {
+    return appState.copyDraft?.sections || [];
+  }
+  /** @type {Array<{ heading: string; content: string }>} */
+  const sections = [];
+  list.querySelectorAll(".copy-section").forEach((row) => {
+    const heading = row.querySelector(".section-heading-input")?.value.trim() || "";
+    const content = row.querySelector(".section-content-input")?.value.trim() || "";
+    if (heading || content) {
+      sections.push({ heading, content });
+    }
+  });
+  return sections;
+}
+
+/** @param {HTMLElement} row */
+function readSectionRow(row) {
+  return {
+    heading: row.querySelector(".section-heading-input")?.value.trim() || "",
+    content: row.querySelector(".section-content-input")?.value.trim() || "",
+  };
+}
+
+/** @param {HTMLElement} row */
+function readSectionsContextBeforeRow(row) {
+  const list = document.querySelector("#copy-sections-list");
+  /** @type {Array<{ heading: string; content: string }>} */
+  const sections = [];
+  list?.querySelectorAll(".copy-section").forEach((sectionRow) => {
+    if (sectionRow === row) {
+      return;
+    }
+    const section = readSectionRow(sectionRow);
+    if (section.heading || section.content) {
+      sections.push(section);
+    }
+  });
+  return sections;
+}
+
+function renderSectionRowHtml(sec = { heading: "", content: "" }) {
+  return `
+    <input type="text" class="section-heading-input field-borderless"
+      placeholder="小节标题（≤18字）" maxlength="18"
+      value="${escapeAttr(sec.heading || "")}" />
+    <textarea class="section-content-input editor-body" rows="5"
+      placeholder="小节正文…">${escapeHtml(sec.content || "")}</textarea>
+    <div class="copy-section-actions">
+      <button type="button" class="btn-secondary copy-section-continue-btn">继续生成</button>
+    </div>`;
+}
+
+/** @param {Array<{ heading: string; content: string }>} [sections] */
+function renderSectionsEditorHtml(sections) {
+  const items = (sections?.length ? sections : [{ heading: "", content: "" }])
+    .map(
+      (sec) => `
+      <div class="copy-section">
+        ${renderSectionRowHtml(sec)}
+      </div>`
+    )
+    .join("");
+  return `<div id="copy-sections-list" class="copy-sections-list">${items}</div>
+    <button type="button" id="copy-add-section-btn" class="btn-secondary copy-add-section-btn">+ 添加小节</button>`;
+}
+
+/**
+ * @param {HTMLElement} row
+ * @param {HTMLElement} statusEl
+ */
+async function handleContinueSection(row, statusEl) {
+  if (!window.noteGen?.invoke) {
+    statusEl.textContent = "请通过 Electron 启动应用（npm run dev）";
+    return;
+  }
+
+  syncCopyFromEditor();
+  const draft = readSectionRow(row);
+  const sections = readSectionsContextBeforeRow(row);
+  const titleEl = document.querySelector("#copy-title-input");
+  const summaryEl = document.querySelector("#copy-summary-input");
+  const bodyEl = document.querySelector("#copy-body-input");
+  const styleSelect = document.querySelector("#style-select");
+  const btn = row.querySelector(".copy-section-continue-btn");
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("is-loading");
+  }
+  statusEl.textContent = "正在续写小节…";
+
+  try {
+    const result = await window.noteGen.invoke("copy:continueSection", {
+      title: titleEl?.value.trim() || "",
+      summary: summaryEl?.value.trim() || "",
+      body: bodyEl?.value.trim() || "",
+      sections,
+      draft,
+      styleId: styleSelect?.value || appState.styleId,
+      ...workspacePipelinePayload(),
+    });
+    const headingInput = row.querySelector(".section-heading-input");
+    const contentInput = row.querySelector(".section-content-input");
+    if (headingInput) {
+      headingInput.value = result.heading;
+    }
+    if (contentInput) {
+      contentInput.value = result.content;
+    }
+    syncCopyFromEditor();
+    saveWorkspaceNow();
+    statusEl.textContent = "小节已生成，可继续编辑或再次续写";
+    notify();
+  } catch (error) {
+    statusEl.textContent = `小节续写失败：${error.message}`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("is-loading");
+    }
+  }
+}
+
+/** @param {HTMLElement} row */
+function bindSectionRowEvents(row, statusEl) {
+  row.querySelectorAll(".section-heading-input, .section-content-input").forEach((el) => {
+    el.addEventListener("input", syncCopyFromEditor);
+  });
+  row.querySelector(".copy-section-continue-btn")?.addEventListener("click", () => {
+    handleContinueSection(row, statusEl);
+  });
+}
+
+/** @param {HTMLElement} root */
+function bindSectionsEditorEvents(root) {
+  const addBtn = root.querySelector("#copy-add-section-btn");
+  const list = root.querySelector("#copy-sections-list");
+  const statusEl = root.querySelector("#copy-status");
+  if (!addBtn || !list || !statusEl) {
+    return;
+  }
+  addBtn.addEventListener("click", () => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "copy-section";
+    wrapper.innerHTML = renderSectionRowHtml();
+    list.appendChild(wrapper);
+    bindSectionRowEvents(wrapper, statusEl);
+    wrapper.querySelector(".section-heading-input")?.focus();
+    syncCopyFromEditor();
+  });
+  list.querySelectorAll(".copy-section").forEach((row) => {
+    bindSectionRowEvents(row, statusEl);
+  });
+}
+
 /**
  * Mount center workspace with section-switching content.
  * @param {HTMLElement} root
@@ -107,6 +277,36 @@ function getWritingHtml() {
     ? `基于选题：${escapeHtml(topic.title)}`
     : "请先在「选题」中选择一个方向";
 
+  if (isWechatArticle()) {
+    return `
+    <div class="workspace-header">
+      <h2 class="workspace-title">成文</h2>
+      <p class="workspace-desc">${topicHint}</p>
+    </div>
+    <div class="workspace-editor">
+      <div class="editor-toolbar">
+        <select id="style-select" class="field-select field-select-inline"></select>
+        <div class="editor-actions">
+          <button id="copy-generate-btn" type="button" class="btn-primary"
+            ${topic ? "" : "disabled"}>生成长文</button>
+          <button id="copy-humanize-btn" type="button" class="btn-secondary"
+            ${copy ? "" : "disabled"}>去 AI 味</button>
+        </div>
+      </div>
+      <p id="copy-status" class="workspace-status" aria-live="polite"></p>
+      <input id="copy-title-input" type="text" class="editor-title"
+        maxlength="25" placeholder="文章标题（≤25 字）"
+        value="${copy ? escapeAttr(copy.title) : ""}" />
+      <input id="copy-summary-input" type="text" class="field-borderless field-secondary"
+        maxlength="80" placeholder="摘要（50-80 字，用于分享与导读）"
+        value="${copy ? escapeAttr(copy.summary || "") : ""}" />
+      <textarea id="copy-body-input" class="editor-body" rows="6"
+        placeholder="引言 / Lead 段…">${copy ? escapeHtml(copy.body) : ""}</textarea>
+      ${renderSectionsEditorHtml(copy?.sections)}
+    </div>
+  `;
+  }
+
   return `
     <div class="workspace-header">
       <h2 class="workspace-title">文案</h2>
@@ -139,7 +339,9 @@ function getImagesHtml() {
   const copy = appState.copyDraft;
   const copyHint = copy
     ? `基于文案：${escapeHtml(copy.title)}`
-    : "请先在「文案」中生成内容";
+    : `请先在「${isWechatArticle() ? "成文" : "文案"}」中生成内容`;
+  const planLabel = isWechatArticle() ? "规划配图结构" : "规划页面结构";
+  const renderLabel = isWechatArticle() ? "生成配图" : "生成卡片图片";
 
   return `
     <div class="workspace-header">
@@ -148,12 +350,12 @@ function getImagesHtml() {
     </div>
     <div class="workspace-fields">
       <button id="card-plan-btn" type="button" class="btn-primary"
-        ${copy ? "" : "disabled"}>规划页面结构</button>
+        ${copy ? "" : "disabled"}>${planLabel}</button>
     </div>
     <p id="card-status" class="workspace-status" aria-live="polite"></p>
     <div id="page-plan-list" class="page-plan-list" hidden></div>
     <div class="workspace-fields">
-      <button id="card-render-btn" type="button" class="btn-primary" disabled>生成卡片图片</button>
+      <button id="card-render-btn" type="button" class="btn-primary" disabled>${renderLabel}</button>
     </div>
   `;
 }
@@ -211,6 +413,7 @@ function bindIdeaEvents(root) {
         targetReader: targetReaderInput.value.trim(),
         hookLevel: Number(hookLevelSelect.value),
         count: 5,
+        ...workspacePipelinePayload(),
       });
 
       renderTopicList(topicList, result, statusEl);
@@ -300,8 +503,13 @@ function bindWritingEvents(root) {
   const titleInput = root.querySelector("#copy-title-input");
   const bodyInput = root.querySelector("#copy-body-input");
   const hashtagsInput = root.querySelector("#copy-hashtags-input");
+  const summaryInput = root.querySelector("#copy-summary-input");
 
   loadStyles(styleSelect, statusEl);
+
+  if (isWechatArticle()) {
+    bindSectionsEditorEvents(root);
+  }
 
   generateBtn.addEventListener("click", async () => {
     const topic = appState.selectedTopic;
@@ -320,6 +528,7 @@ function bindWritingEvents(root) {
         angle: topic.angle,
         targetReader: topic.targetReader,
         styleId: styleSelect.value,
+        ...workspacePipelinePayload(),
       });
       appState.styleId = styleSelect.value;
       showCopy(result, titleInput, bodyInput, hashtagsInput, humanizeBtn, statusEl);
@@ -343,12 +552,27 @@ function bindWritingEvents(root) {
     humanizeBtn.classList.add("is-loading");
 
     try {
-      const result = await window.noteGen.invoke("copy:humanize", { body });
+      const sections = isWechatArticle() ? readSectionsFromDom() : [];
+      const result = await window.noteGen.invoke("copy:humanize", {
+        body,
+        sections,
+        ...workspacePipelinePayload(),
+      });
       bodyInput.value = result.body;
       if (appState.copyDraft) {
         appState.copyDraft.body = result.body;
+        if (result.sections?.length) {
+          appState.copyDraft.sections = result.sections;
+        }
       }
-      statusEl.textContent = "正文已重写，更像真人博主";
+      if (isWechatArticle() && result.sections?.length) {
+        const inner = root.closest("#workspace-inner") || document.querySelector("#workspace-inner");
+        if (inner) {
+          renderSection(inner);
+          return;
+        }
+      }
+      statusEl.textContent = "正文已重写，更像真人作者";
       notify();
       saveWorkspaceNow();
     } catch (error) {
@@ -364,6 +588,9 @@ function bindWritingEvents(root) {
   }
   if (bodyInput) {
     bodyInput.addEventListener("input", syncCopyFromEditor);
+  }
+  if (summaryInput) {
+    summaryInput.addEventListener("input", syncCopyFromEditor);
   }
   if (hashtagsInput) {
     hashtagsInput.addEventListener("input", syncCopyFromEditor);
@@ -404,7 +631,29 @@ async function loadStyles(styleSelect, statusEl) {
  * @param {HTMLElement} statusEl
  */
 function showCopy(copy, titleInput, bodyInput, hashtagsInput, humanizeBtn, statusEl) {
-  appState.copyDraft = copy;
+  appState.copyDraft = {
+    ...copy,
+    summary: copy.summary || "",
+    sections: copy.sections || [],
+    hashtags: copy.hashtags || [],
+  };
+
+  if (isWechatArticle()) {
+    appState.pagePlan = null;
+    appState.pageAssets = {};
+    appState.renderedImages = [];
+    appState.completedSections.delete("images");
+    markSectionDone("writing");
+    statusEl.textContent = "长文已生成，可直接编辑各小节";
+    notify();
+    saveWorkspaceNow();
+    const inner = document.querySelector("#workspace-inner");
+    if (inner) {
+      renderSection(inner);
+    }
+    return;
+  }
+
   titleInput.value = copy.title;
   bodyInput.value = copy.body;
   hashtagsInput.value = (copy.hashtags || []).join(" ");
@@ -425,16 +674,29 @@ function syncCopyFromEditor() {
   const titleEl = document.querySelector("#copy-title-input");
   const bodyEl = document.querySelector("#copy-body-input");
   const hashtagsEl = document.querySelector("#copy-hashtags-input");
+  const summaryEl = document.querySelector("#copy-summary-input");
   if (!titleEl || !bodyEl) {
     return;
   }
-  appState.copyDraft = {
-    title: titleEl.value.trim(),
-    body: bodyEl.value.trim(),
-    hashtags: hashtagsEl
-      ? hashtagsEl.value.trim().split(/\s+/).filter(Boolean)
-      : [],
-  };
+  if (isWechatArticle()) {
+    appState.copyDraft = {
+      title: titleEl.value.trim(),
+      summary: summaryEl?.value.trim() || "",
+      body: bodyEl.value.trim(),
+      sections: readSectionsFromDom(),
+      hashtags: [],
+    };
+  } else {
+    appState.copyDraft = {
+      title: titleEl.value.trim(),
+      body: bodyEl.value.trim(),
+      hashtags: hashtagsEl
+        ? hashtagsEl.value.trim().split(/\s+/).filter(Boolean)
+        : [],
+      sections: [],
+      summary: "",
+    };
+  }
   notify();
 }
 
@@ -451,8 +713,8 @@ function bindImagesEvents(root) {
 
   planBtn.addEventListener("click", async () => {
     const copy = getCopyFromEditor();
-    if (!copy.title || !copy.body) {
-      statusEl.textContent = "请先在「文案」中生成或填写内容";
+    if (!copy.title || (!copy.body && !(copy.sections?.length))) {
+      statusEl.textContent = "请先在「成文」中生成或填写内容";
       return;
     }
     appState.copyDraft = copy;
@@ -461,7 +723,10 @@ function bindImagesEvents(root) {
     planBtn.classList.add("is-loading");
 
     try {
-      const plan = await window.noteGen.invoke("cards:plan", copy);
+      const plan = await window.noteGen.invoke("cards:plan", {
+        ...copy,
+        ...workspacePipelinePayload(),
+      });
       appState.pagePlan = plan;
       renderPagePlan(planList, renderBtn, statusEl);
       statusEl.textContent = `已规划 ${plan.pages.length} 页，请为需要素材的页面配图`;
@@ -520,12 +785,28 @@ function getCopyFromEditor() {
   const title = document.querySelector("#copy-title-input");
   const body = document.querySelector("#copy-body-input");
   const hashtags = document.querySelector("#copy-hashtags-input");
+  const summary = document.querySelector("#copy-summary-input");
+  const baseTitle = title ? title.value.trim() : appState.copyDraft?.title || "";
+  const baseBody = body ? body.value.trim() : appState.copyDraft?.body || "";
+
+  if (isWechatArticle()) {
+    return {
+      title: baseTitle,
+      summary: summary ? summary.value.trim() : appState.copyDraft?.summary || "",
+      body: baseBody,
+      sections: readSectionsFromDom(),
+      hashtags: [],
+    };
+  }
+
   return {
-    title: title ? title.value.trim() : appState.copyDraft?.title || "",
-    body: body ? body.value.trim() : appState.copyDraft?.body || "",
+    title: baseTitle,
+    body: baseBody,
     hashtags: hashtags
       ? hashtags.value.trim().split(/\s+/).filter(Boolean)
       : appState.copyDraft?.hashtags || [],
+    sections: [],
+    summary: "",
   };
 }
 

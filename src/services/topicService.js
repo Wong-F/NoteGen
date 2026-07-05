@@ -6,10 +6,10 @@
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
 const { PromptCatalog, HOOK_LEVELS } = require("./promptCatalog");
+const { appendPersonaBlock } = require("./personaContext");
+const { resolvePlatformPack } = require("./platformPacks");
 
 const DEFAULT_TOPIC_COUNT = 5;
-const TOPIC_PROMPT_KIND = "topic";
-const TOPIC_PROMPT_NAME = "xiaohongshu-topic-expert";
 
 class TopicService {
   /**
@@ -34,7 +34,7 @@ class TopicService {
 
   /**
    * Build the system/user messages for topic suggestion.
-   * @param {{ keywords: string; targetReader?: string; count?: number; hookLevel?: number }} payload
+   * @param {{ keywords: string; targetReader?: string; count?: number; hookLevel?: number; persona?: object | null; workflowType?: string }} payload
    */
   buildMessages(payload) {
     const keywords = payload.keywords?.trim();
@@ -42,17 +42,28 @@ class TopicService {
       throw new Error("领域或关键词不能为空");
     }
 
-    const hook = this.resolveHookLevel(payload.hookLevel ?? 1);
+    const pack = resolvePlatformPack(payload);
+    const hook = this.resolveHookLevel(
+      payload.hookLevel ?? payload.persona?.defaultHookLevel ?? 1
+    );
     const count = payload.count ?? DEFAULT_TOPIC_COUNT;
-    const targetReader = payload.targetReader?.trim() || "（请根据关键词推断）";
+    const targetReader =
+      payload.targetReader?.trim() ||
+      payload.persona?.targetReader?.trim() ||
+      pack.defaultTargetReader;
 
-    const userContent = this.promptCatalog.renderPrompt(TOPIC_PROMPT_KIND, TOPIC_PROMPT_NAME, {
-      DOMAIN_KEYWORDS: keywords,
-      TARGET_READER: targetReader,
-      TOPIC_COUNT: count,
-      HOOK_LEVEL: hook.level,
-      HOOK_LEVEL_LABEL: hook.label,
-    });
+    let userContent = this.promptCatalog.renderPrompt(
+      pack.prompts.topic.kind,
+      pack.prompts.topic.name,
+      {
+        DOMAIN_KEYWORDS: keywords,
+        TARGET_READER: targetReader,
+        TOPIC_COUNT: count,
+        HOOK_LEVEL: hook.level,
+        HOOK_LEVEL_LABEL: hook.label,
+      }
+    );
+    userContent = appendPersonaBlock(userContent, payload.persona);
 
     return [
       {
@@ -94,6 +105,9 @@ class TopicService {
         rank: typeof item.rank === "number" ? item.rank : index + 1,
         title,
         angle: angle || "待补充切入角度",
+        articleStructure: String(
+          item.article_structure || item.articleStructure || ""
+        ).trim(),
         targetReader: String(item.target_reader || item.targetReader || context.keywords).trim(),
         strategy: String(item.strategy || "experience").trim(),
         recommendationReason: String(
@@ -116,7 +130,7 @@ class TopicService {
 
   /**
    * Suggest topic candidates from domain keywords.
-   * @param {{ keywords: string; targetReader?: string; count?: number; hookLevel?: number }} payload
+   * @param {{ keywords: string; targetReader?: string; count?: number; hookLevel?: number; persona?: object | null; workflowType?: string }} payload
    */
   async suggest(payload) {
     const keywords = payload.keywords?.trim();
@@ -124,7 +138,9 @@ class TopicService {
       throw new Error("领域或关键词不能为空");
     }
 
-    const hook = this.resolveHookLevel(payload.hookLevel ?? 1);
+    const hook = this.resolveHookLevel(
+      payload.hookLevel ?? payload.persona?.defaultHookLevel ?? 1
+    );
     const messages = this.buildMessages({ ...payload, keywords });
 
     const raw = await this.aiService.completeJson(messages, { temperature: 0.7 });
@@ -136,4 +152,4 @@ class TopicService {
   }
 }
 
-module.exports = { TopicService, DEFAULT_TOPIC_COUNT, TOPIC_PROMPT_NAME };
+module.exports = { TopicService, DEFAULT_TOPIC_COUNT };

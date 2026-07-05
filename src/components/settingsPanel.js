@@ -1,3 +1,5 @@
+import { replayWelcomeTour } from "./onboardingTour.js";
+
 /**
  * Mount settings drawer (triggered from header).
  * @param {HTMLElement} root — app root for overlay placement
@@ -15,6 +17,13 @@ export function mountSettingsPanel(root, options = {}) {
         <button type="button" class="btn-ghost settings-close-btn" aria-label="关闭">✕</button>
       </div>
       <div class="settings-drawer-body">
+        <section class="settings-group">
+          <h3 class="settings-group-title">帮助</h3>
+          <p class="settings-help-text">需要回顾界面说明时，可重新观看新手教程。</p>
+          <button id="settings-replay-tour-btn" type="button" class="btn-secondary">
+            重新观看新手教程
+          </button>
+        </section>
         <section class="settings-group">
           <h3 class="settings-group-title">账户</h3>
           <div id="settings-account-card" class="settings-account-card">
@@ -74,6 +83,7 @@ export function mountSettingsPanel(root, options = {}) {
   const testBtn = overlay.querySelector("#ai-test-btn");
   const stockTestBtn = overlay.querySelector("#stock-test-btn");
   const saveBtn = overlay.querySelector("#settings-save-btn");
+  const replayTourBtn = overlay.querySelector("#settings-replay-tour-btn");
   const statusEl = overlay.querySelector("#settings-status");
 
   function renderAccountCard(profile) {
@@ -234,6 +244,14 @@ export function mountSettingsPanel(root, options = {}) {
       statusEl.textContent = "设置已保存";
     } catch (error) {
       statusEl.textContent = `保存失败：${error.message}`;
+    }
+  });
+
+  replayTourBtn.addEventListener("click", async () => {
+    try {
+      await replayWelcomeTour({ closeSettings: close });
+    } catch (error) {
+      statusEl.textContent = `无法启动教程：${error.message}`;
     }
   });
 

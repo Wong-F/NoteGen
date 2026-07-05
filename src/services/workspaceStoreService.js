@@ -5,6 +5,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { getDefaultIdeaInput, fillIdeaInputDefaults } = require("../constants/formDefaults.cjs");
 
 const DEFAULT_WORKFLOW_TYPE = "xiaohongshu-note";
 const RECENT_DISPLAY_LIMIT = 20;
@@ -14,6 +15,7 @@ const RECENT_DISPLAY_LIMIT = 20;
  * @property {string} id
  * @property {string} title
  * @property {string} workflowType
+ * @property {string | null} personaId
  * @property {string} createdAt
  * @property {string} updatedAt
  * @property {string[]} keywords
@@ -25,6 +27,7 @@ const RECENT_DISPLAY_LIMIT = 20;
  * @property {string} id
  * @property {string} title
  * @property {string} workflowType
+ * @property {string | null} personaId
  * @property {string} createdAt
  * @property {string} updatedAt
  * @property {string | null} sessionId
@@ -34,7 +37,7 @@ const RECENT_DISPLAY_LIMIT = 20;
  * @property {Array<object>} generatedTopics
  * @property {object | null} selectedTopic
  * @property {string} styleId
- * @property {{ title: string; body: string; hashtags: string[] } | null} copyDraft
+ * @property {{ title: string; body: string; summary?: string; sections?: Array<{ heading: string; content: string }>; hashtags?: string[] } | null} copyDraft
  * @property {object | null} pagePlan
  * @property {Record<string, { absolutePath: string; relativePath: string; source: string }>} pageAssets
  * @property {Array<{ id: string; absolutePath: string }>} renderedImages
@@ -46,18 +49,19 @@ const RECENT_DISPLAY_LIMIT = 20;
 /**
  * @returns {WorkspaceState}
  */
-function createBlankWorkspaceState(id) {
+function createBlankWorkspaceState(id, workflowType = DEFAULT_WORKFLOW_TYPE) {
   const now = new Date().toISOString();
   return {
     id,
     title: "未命名创作",
-    workflowType: DEFAULT_WORKFLOW_TYPE,
+    workflowType,
+    personaId: null,
     createdAt: now,
     updatedAt: now,
     sessionId: null,
     activeSection: "idea",
     completedSections: [],
-    ideaInput: { keywords: "", targetReader: "", hookLevel: 2 },
+    ideaInput: getDefaultIdeaInput(workflowType),
     generatedTopics: [],
     selectedTopic: null,
     styleId: "",
@@ -116,6 +120,7 @@ function toIndexEntry(state) {
     id: state.id,
     title: state.title,
     workflowType: state.workflowType,
+    personaId: state.personaId || null,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
     keywords: state.keywords || [],
@@ -186,12 +191,14 @@ class WorkspaceStoreService {
   create(seed) {
     const id = seed?.id || randomUUID();
     const now = new Date().toISOString();
+    const workflowType = seed?.workflowType || DEFAULT_WORKFLOW_TYPE;
     const state = {
-      ...createBlankWorkspaceState(id),
+      ...createBlankWorkspaceState(id, workflowType),
       ...seed,
       id,
       createdAt: seed?.createdAt || now,
       updatedAt: now,
+      ideaInput: fillIdeaInputDefaults(seed?.ideaInput, workflowType),
     };
     state.keywords = extractKeywords(state);
     this.save(state);
@@ -275,13 +282,39 @@ class WorkspaceStoreService {
   }
 
   /**
-   * @param {{ query?: string; limit?: number }} [options]
+   * @param {string} id
+   * @param {string | null} personaId
+   * @returns {WorkspaceState}
+   */
+  /**
+   * @param {string} id
+   * @param {string | null} personaId
+   * @param {string} [workflowType]
+   */
+  rebindPersona(id, personaId, workflowType) {
+    const workspace = this.get(id);
+    if (!workspace) {
+      throw new Error("workspace not found");
+    }
+    const patch = { ...workspace, personaId: personaId || null };
+    if (workflowType) {
+      patch.workflowType = workflowType;
+    }
+    return this.save(patch);
+  }
+
+  /**
+   * @param {{ query?: string; limit?: number; personaId?: string | null }} [options]
    * @returns {{ activeWorkspaceId: string | null; workspaces: WorkspaceIndexEntry[] }}
    */
   list(options = {}) {
     const index = this.readIndex();
     const query = options.query?.trim().toLowerCase();
     let workspaces = index.workspaces;
+
+    if (options.personaId) {
+      workspaces = workspaces.filter((item) => item.personaId === options.personaId);
+    }
 
     if (query) {
       workspaces = workspaces.filter((item) => {

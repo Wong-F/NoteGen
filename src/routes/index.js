@@ -1,6 +1,8 @@
 const { ipcMain, dialog, clipboard, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { resolvePersona } = require("../services/personaContext");
+const { resolvePlatformPack, workflowTypeForPersona } = require("../services/platformPacks");
 
 /**
  * Register IPC routes. Each route maps a channel to a service method.
@@ -46,7 +48,8 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("topics:suggest", async (_event, payload) => {
-    return services.topicService.suggest(payload);
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.topicService.suggest({ ...payload, persona });
   });
 
   ipcMain.handle("copy:listStyles", async () => {
@@ -54,11 +57,38 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("copy:generate", async (_event, payload) => {
-    return services.copyService.generate(payload);
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.copyService.generate({ ...payload, persona });
   });
 
   ipcMain.handle("copy:humanize", async (_event, payload) => {
-    return services.copyService.humanize(payload);
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.copyService.humanize({ ...payload, persona });
+  });
+
+  ipcMain.handle("copy:continueSection", async (_event, payload) => {
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.copyService.continueSection({ ...payload, persona });
+  });
+
+  ipcMain.handle("onboarding:get", async () => {
+    return services.onboardingService.get();
+  });
+
+  ipcMain.handle("onboarding:completeWelcome", async (_event, payload) => {
+    return services.onboardingService.completeWelcome({
+      skipped: Boolean(payload?.skipped),
+    });
+  });
+
+  ipcMain.handle("onboarding:completeFirstWorkspace", async (_event, payload) => {
+    return services.onboardingService.completeFirstWorkspace({
+      skipped: Boolean(payload?.skipped),
+    });
+  });
+
+  ipcMain.handle("onboarding:reset", async () => {
+    return services.onboardingService.reset();
   });
 
   ipcMain.handle("images:pick", async () => {
@@ -87,7 +117,7 @@ function registerRoutes(services) {
   ipcMain.handle("images:previewDataUrl", async (_event, payload) => {
     const absolutePath = payload?.absolutePath;
     if (!absolutePath || !fs.existsSync(absolutePath)) {
-      throw new Error("预览图片不存在");
+      throw new Error("???????");
     }
     const buffer = fs.readFileSync(absolutePath);
     const ext = path.extname(absolutePath).toLowerCase();
@@ -101,7 +131,8 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("cards:plan", async (_event, payload) => {
-    return services.cardService.planPages(payload);
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.cardService.planPages({ ...payload, persona });
   });
 
   ipcMain.handle("cards:render", async (_event, payload) => {
@@ -109,18 +140,36 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("export:copyText", async (_event, payload) => {
-    const text = services.exportService.formatNoteText(payload?.copy || {});
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    const copy = payload?.copy || {};
+    const pack = resolvePlatformPack({
+      persona,
+      workflowType: payload?.workflowType,
+      platform: payload?.platform,
+    });
+    const text = pack.formatClipboardText(copy, services.exportService);
     if (!text.trim()) {
-      throw new Error("没有可复制的文案");
+      throw new Error("????????");
     }
     clipboard.writeText(text);
     return { ok: true, charCount: text.length };
   });
 
-  ipcMain.handle("export:pickFolder", async () => {
+  ipcMain.handle("export:suggestFolderName", async (_event, payload) => {
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    const folderName = services.exportService.buildFolderName({
+      persona,
+      copy: payload?.copy || {},
+      workspaceTitle: payload?.workspaceTitle,
+    });
+    return { folderName };
+  });
+
+  ipcMain.handle("export:pickFolder", async (_event, payload) => {
     const result = await dialog.showOpenDialog({
-      title: "选择导出文件夹",
-      buttonLabel: "导出到这里",
+      title: "???????",
+      buttonLabel: "??????",
+      defaultPath: payload?.defaultPath || undefined,
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || !result.filePaths.length) {
@@ -130,20 +179,36 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("export:saveToFolder", async (_event, payload) => {
-    const folderPath = payload?.folderPath?.trim();
+    const parentPath = payload?.parentPath?.trim() || payload?.folderPath?.trim();
     const copy = payload?.copy || {};
     const images = payload?.images || [];
-    if (!folderPath) {
-      throw new Error("导出目录不能为空");
+    if (!parentPath) {
+      throw new Error("????????");
     }
-    const result = services.exportService.exportToDirectory(folderPath, copy, images);
-    return { ...result, imageCount: result.imagePaths.length };
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    const pack = resolvePlatformPack({
+      persona,
+      workflowType: payload?.workflowType,
+      platform: payload?.platform,
+    });
+    const platform = pack.id;
+    const result = services.exportService.exportPackage(parentPath, copy, images, {
+      persona,
+      platform,
+      workspaceTitle: payload?.workspaceTitle,
+      folderName: payload?.folderName,
+    });
+    return {
+      ...result,
+      imageCount: result.imagePaths.length,
+      platform,
+    };
   });
 
   ipcMain.handle("export:revealFolder", async (_event, payload) => {
     const folderPath = payload?.folderPath;
     if (!folderPath) {
-      throw new Error("文件夹路径无效");
+      throw new Error("???????");
     }
     await shell.openPath(folderPath);
     return { ok: true };
@@ -162,7 +227,14 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("workspaces:create", async (_event, payload) => {
-    return services.workspaceStoreService.create(payload || {});
+    const seed = { ...(payload || {}) };
+    if (seed.personaId) {
+      const persona = services.personaStoreService.get(seed.personaId);
+      if (persona) {
+        seed.workflowType = workflowTypeForPersona(persona);
+      }
+    }
+    return services.workspaceStoreService.create(seed);
   });
 
   ipcMain.handle("workspaces:save", async (_event, payload) => {
@@ -186,6 +258,67 @@ function registerRoutes(services) {
       throw new Error("workspace id is required");
     }
     return services.workspaceStoreService.setActive(id);
+  });
+
+  ipcMain.handle("workspaces:rebindPersona", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("workspace id is required");
+    }
+    const personaId = payload?.personaId?.trim() || null;
+    let workflowType;
+    if (personaId) {
+      const persona = services.personaStoreService.get(personaId);
+      if (persona) {
+        workflowType = workflowTypeForPersona(persona);
+      }
+    }
+    return services.workspaceStoreService.rebindPersona(id, personaId, workflowType);
+  });
+
+  ipcMain.handle("personas:list", async () => {
+    return services.personaStoreService.list();
+  });
+
+  ipcMain.handle("personas:get", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("persona id is required");
+    }
+    return services.personaStoreService.get(id);
+  });
+
+  ipcMain.handle("personas:create", async (_event, payload) => {
+    return services.personaStoreService.create(payload || {});
+  });
+
+  ipcMain.handle("personas:save", async (_event, payload) => {
+    if (!payload?.id) {
+      throw new Error("persona id is required");
+    }
+    return services.personaStoreService.save(payload);
+  });
+
+  ipcMain.handle("personas:delete", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("persona id is required");
+    }
+    return services.personaStoreService.delete(id, {
+      workspaceStoreService: services.workspaceStoreService,
+    });
+  });
+
+  ipcMain.handle("personas:setActive", async (_event, payload) => {
+    const id = payload?.id?.trim();
+    if (!id) {
+      throw new Error("persona id is required");
+    }
+    return services.personaStoreService.setActive(id);
+  });
+
+  ipcMain.handle("personas:clearActive", async () => {
+    return services.personaStoreService.clearActive();
   });
 }
 

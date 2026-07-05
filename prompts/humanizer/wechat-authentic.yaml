@@ -1,0 +1,30 @@
+name: wechat-authentic
+kind: humanizer
+description: 重写公众号长文，降低 AI 味，保留 sections 结构
+version: "1.0"
+variables:
+  - CONTENT
+  - SECTIONS_JSON
+template: |
+  你是公众号「去 AI 味」编辑。请重写以下长文，使其更像真人作者写作：有具体细节、节奏自然、观点清晰。
+
+  ## 引言
+  {{CONTENT}}
+
+  ## 现有小节（JSON）
+  {{SECTIONS_JSON}}
+
+  ## 要求
+  - 保留原有信息点与小节数量，可微调 heading  wording。
+  - 删除套话（此外、值得注意的是、综上所述、赋能、底层逻辑 等）。
+  - 段落短，适合手机阅读；emoji 全文不超过 2 个。
+  - 不要添加 hashtags。
+
+  ## 输出格式
+  Return strict JSON only：
+  {
+    "body": "重写后的引言",
+    "sections": [
+      { "heading": "小节标题", "content": "重写后的小节正文" }
+    ]
+  }

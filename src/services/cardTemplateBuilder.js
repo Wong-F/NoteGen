@@ -12,10 +12,13 @@
  *   imageRelativePath?: string;
  * }} page
  * @param {number} index
+ * @param {{ defaultPosterClass?: string }} [options]
  */
-function buildPosterSection(page, index) {
+function buildPosterSection(page, index, options = {}) {
+  const defaultClass = options.defaultPosterClass || "xhs";
+  const posterClass = page.posterClass || defaultClass;
   const isCover = page.role === "cover" || index === 0;
-  const classes = ["poster", "xhs", isCover ? "cover" : "content"].join(" ");
+  const classes = ["poster", posterClass, isCover ? "cover" : "content"].join(" ");
   const vol = String(index + 1).padStart(2, "0");
   const hero = page.imageAbsolutePath
     ? `<img class="hero" src="${escapeAttr(toFileUrl(page.imageAbsolutePath))}" alt="" />`

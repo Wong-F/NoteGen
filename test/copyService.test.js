@@ -49,6 +49,25 @@ describe("CopyService", () => {
     assert.match(messages[1].content, /闺蜜/);
   });
 
+  it("buildGenerateMessages uses persona voice and default style", () => {
+    const messages = service.buildGenerateMessages({
+      title: "效率工具",
+      angle: "3 个方法",
+      persona: {
+        name: "干货姐",
+        platform: "xiaohongshu",
+        targetReader: "上班族",
+        voiceSummary: "干脆清单体",
+        taboos: ["震惊体"],
+        defaultStyleId: "dry-goods",
+      },
+    });
+
+    assert.match(messages[1].content, /运营人设约束/);
+    assert.match(messages[1].content, /干货博主/);
+    assert.match(messages[1].content, /震惊体/);
+  });
+
   it("generate returns normalized copy from mock LLM", async () => {
     const result = await service.generate({
       title: "探店标题",
@@ -72,6 +91,20 @@ describe("CopyService", () => {
     assert.equal(copy.title.length, 20);
   });
 
+  it("normalizeCopy uses wechat pack when persona is wechat", () => {
+    const copy = service.normalizeCopy(
+      {
+        title: "公众号长文标题",
+        summary: "摘要",
+        body: "引言",
+        sections: [{ heading: "小节", content: "内容" }],
+      },
+      { persona: { platform: "wechat" } }
+    );
+    assert.equal(copy.sections.length, 1);
+    assert.equal(copy.summary, "摘要");
+  });
+
   it("humanize returns rewritten body", async () => {
     const result = await service.humanize({
       body: "此外，值得注意的是，这家咖啡店本质上体现了精品咖啡的趋势。",
@@ -82,5 +115,66 @@ describe("CopyService", () => {
 
   it("humanize rejects empty body", async () => {
     await assert.rejects(service.humanize({ body: "  " }), /不能为空/);
+  });
+
+  it("buildContinueSectionMessages requires article context", () => {
+    assert.throws(
+      () =>
+        service.buildContinueSectionMessages({
+          workflowType: "wechat-article",
+          draft: { heading: "", content: "" },
+        }),
+      /请先生成或填写/
+    );
+  });
+
+  it("buildContinueSectionMessages allows empty draft with article context", () => {
+    const messages = service.buildContinueSectionMessages({
+      workflowType: "wechat-article",
+      title: "长文标题",
+      body: "引言段落",
+      sections: [{ heading: "第一节", content: "已有内容" }],
+      draft: { heading: "", content: "" },
+    });
+
+    assert.match(messages[1].content, /长文标题/);
+    assert.match(messages[1].content, /空，请续写下一小节/);
+    assert.match(messages[1].content, /第一节/);
+  });
+
+  it("buildContinueSectionMessages embeds user draft heading", () => {
+    const messages = service.buildContinueSectionMessages({
+      workflowType: "wechat-article",
+      title: "长文标题",
+      body: "引言",
+      sections: [],
+      draft: { heading: "用户自拟标题", content: "" },
+    });
+
+    assert.match(messages[1].content, /用户自拟标题/);
+  });
+
+  it("continueSection returns normalized section from mock LLM", async () => {
+    const wechatAi = {
+      completeJson: async () => ({
+        heading: "新小节标题",
+        content: "这是续写的小节正文，适合手机阅读。",
+      }),
+    };
+    const wechatService = new CopyService(wechatAi, {
+      promptCatalog: new PromptCatalog(promptsDir),
+      writerCatalog: new WriterCatalog(writersDir),
+    });
+
+    const result = await wechatService.continueSection({
+      workflowType: "wechat-article",
+      title: "文章标题",
+      body: "引言",
+      sections: [{ heading: "上一节", content: "上一节内容" }],
+      draft: { heading: "", content: "" },
+    });
+
+    assert.equal(result.heading, "新小节标题");
+    assert.match(result.content, /续写的小节正文/);
   });
 });

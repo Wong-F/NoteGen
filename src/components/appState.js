@@ -1,5 +1,12 @@
 /** Shared workspace state with persistence hooks. */
 
+import {
+  getPersonaTemplate,
+  getDefaultIdeaInput,
+  fillIdeaInputDefaults,
+  mergePersonaSeed,
+} from "../constants/formDefaults.js";
+
 export const appState = {
 
   /** @type {string | null} */
@@ -16,7 +23,7 @@ export const appState = {
 
   /** @type {{ keywords: string; targetReader: string; hookLevel: number }} */
 
-  ideaInput: { keywords: "", targetReader: "", hookLevel: 2 },
+  ideaInput: getDefaultIdeaInput("xiaohongshu-note"),
 
   /** @type {Array<object>} */
 
@@ -26,7 +33,7 @@ export const appState = {
 
   styleId: "",
 
-  /** @type {{ title: string; body: string; hashtags: string[] } | null} */
+  /** @type {{ title: string; body: string; summary?: string; sections?: Array<{ heading: string; content: string }>; hashtags?: string[] } | null} */
 
   copyDraft: null,
 
@@ -57,6 +64,22 @@ export const appState = {
   /** @type {string} */
 
   workspaceTitle: "未命名创作",
+
+  /** @type {string} */
+
+  workflowType: "xiaohongshu-note",
+
+  /** @type {string | null} */
+
+  activePersonaId: null,
+
+  /** @type {string | null} */
+
+  personaId: null,
+
+  /** @type {boolean} */
+
+  personaReady: false,
 
   /** @type {boolean} */
 
@@ -230,11 +253,13 @@ export function resetAppState() {
 
   appState.activeWorkspaceId = null;
 
+  appState.personaId = null;
+
   appState.sessionId = null;
 
   appState.selectedTopic = null;
 
-  appState.ideaInput = { keywords: "", targetReader: "", hookLevel: 2 };
+  appState.ideaInput = getDefaultIdeaInput("xiaohongshu-note");
 
   appState.generatedTopics = [];
 
@@ -256,6 +281,10 @@ export function resetAppState() {
 
   appState.workspaceTitle = "未命名创作";
 
+  appState.workflowType = "xiaohongshu-note";
+
+  appState.personaReady = false;
+
   appState.workspaceReady = false;
 
 }
@@ -274,11 +303,16 @@ export function hydrateFromWorkspace(workspace) {
 
   appState.activeWorkspaceId = workspace.id;
 
+  appState.personaId = workspace.personaId || null;
+
   appState.sessionId = workspace.sessionId || null;
 
   appState.selectedTopic = workspace.selectedTopic || null;
 
-  appState.ideaInput = workspace.ideaInput || { keywords: "", targetReader: "", hookLevel: 2 };
+  appState.ideaInput = fillIdeaInputDefaults(
+    workspace.ideaInput,
+    workspace.workflowType || "xiaohongshu-note"
+  );
 
   appState.generatedTopics = workspace.generatedTopics || [];
 
@@ -299,6 +333,8 @@ export function hydrateFromWorkspace(workspace) {
   appState.scroll = workspace.scroll || { center: 0, preview: 0, sidebar: 0 };
 
   appState.workspaceTitle = workspace.title || "未命名创作";
+
+  appState.workflowType = workspace.workflowType || "xiaohongshu-note";
 
   appState.workspaceReady = true;
 
@@ -328,6 +364,10 @@ export function snapshotWorkspace() {
 
     title: deriveWorkspaceTitle(),
 
+    workflowType: appState.workflowType || "xiaohongshu-note",
+
+    personaId: appState.personaId ?? null,
+
     sessionId: appState.sessionId,
 
     activeSection: appState.activeSection,
@@ -342,7 +382,13 @@ export function snapshotWorkspace() {
 
     styleId: appState.styleId,
 
-    copyDraft: appState.copyDraft ? { ...appState.copyDraft, hashtags: [...(appState.copyDraft.hashtags || [])] } : null,
+    copyDraft: appState.copyDraft
+      ? {
+          ...appState.copyDraft,
+          hashtags: [...(appState.copyDraft.hashtags || [])],
+          sections: (appState.copyDraft.sections || []).map((section) => ({ ...section })),
+        }
+      : null,
 
     pagePlan: appState.pagePlan,
 

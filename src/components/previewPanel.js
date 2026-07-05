@@ -1,4 +1,4 @@
-import { appState, subscribe } from "./appState.js";
+import { appState, subscribe, deriveWorkspaceTitle } from "./appState.js";
 import { escapeHtml } from "./utils.js";
 
 /**
@@ -46,17 +46,34 @@ function updateExportBar(exportBar) {
 }
 
 /**
- * @returns {{ title: string; body: string; hashtags: string[] } | null}
+ * @returns {object | null}
  */
 function getExportCopy() {
   const titleEl = document.querySelector("#copy-title-input");
   const bodyEl = document.querySelector("#copy-body-input");
   const hashtagsEl = document.querySelector("#copy-hashtags-input");
+  const summaryEl = document.querySelector("#copy-summary-input");
+  const sectionsList = document.querySelector("#copy-sections-list");
 
   if (titleEl || bodyEl) {
+    /** @type {Array<{ heading: string; content: string }>} */
+    let sections = appState.copyDraft?.sections || [];
+    if (sectionsList) {
+      sections = [];
+      sectionsList.querySelectorAll(".copy-section").forEach((row) => {
+        const heading = row.querySelector(".section-heading-input")?.value.trim() || "";
+        const content = row.querySelector(".section-content-input")?.value.trim() || "";
+        if (heading || content) {
+          sections.push({ heading, content });
+        }
+      });
+    }
+
     return {
       title: titleEl?.value.trim() || "",
+      summary: summaryEl?.value.trim() || appState.copyDraft?.summary || "",
       body: bodyEl?.value.trim() || "",
+      sections,
       hashtags: hashtagsEl
         ? hashtagsEl.value.trim().split(/\s+/).filter(Boolean)
         : appState.copyDraft?.hashtags || [],
@@ -70,7 +87,16 @@ function getExportCopy() {
  * @param {{ title?: string; body?: string }} copy
  */
 function hasExportableCopy(copy) {
-  return Boolean(copy?.title?.trim() || copy?.body?.trim());
+  if (!copy?.title?.trim()) {
+    return false;
+  }
+  if (copy.body?.trim()) {
+    return true;
+  }
+  if (Array.isArray(copy.sections) && copy.sections.some((s) => s.content?.trim())) {
+    return true;
+  }
+  return false;
 }
 
 /** @param {HTMLElement} statusEl */
@@ -111,11 +137,18 @@ async function handleExportAll(exportBtn, statusEl) {
     return;
   }
 
-  statusEl.textContent = "请选择导出文件夹…";
+  statusEl.textContent = "请选择导出位置…";
   exportBtn.disabled = true;
 
   try {
-    const pick = await window.noteGen.invoke("export:pickFolder");
+    const suggest = await window.noteGen.invoke("export:suggestFolderName", {
+      copy,
+      personaId: appState.personaId || undefined,
+      workflowType: appState.workflowType,
+      workspaceTitle: deriveWorkspaceTitle(),
+    });
+
+    const pick = await window.noteGen.invoke("export:pickFolder", {});
     if (pick.canceled) {
       statusEl.textContent = "已取消导出";
       return;
@@ -123,13 +156,18 @@ async function handleExportAll(exportBtn, statusEl) {
 
     statusEl.textContent = "正在导出…";
     const result = await window.noteGen.invoke("export:saveToFolder", {
-      folderPath: pick.folderPath,
+      parentPath: pick.folderPath,
       copy,
       images: appState.renderedImages,
+      personaId: appState.personaId || undefined,
+      workflowType: appState.workflowType,
+      workspaceTitle: deriveWorkspaceTitle(),
+      folderName: suggest.folderName,
     });
 
+    const primaryFile = result.platform === "wechat" ? "note.md + note.html" : "note.txt";
     const imageNote = result.imageCount ? `、${result.imageCount} 张图片` : "";
-    statusEl.textContent = `已导出 note.txt${imageNote}`;
+    statusEl.textContent = `已导出到「${result.folderName}」（${primaryFile}${imageNote}）`;
     await window.noteGen.invoke("export:revealFolder", { folderPath: result.folderPath });
   } catch (error) {
     statusEl.textContent = `导出失败：${error.message}`;
@@ -161,6 +199,10 @@ async function renderPreview(contentEl) {
       `;
     }
 
+    if (copy?.summary) {
+      html += `<p class="preview-summary">${escapeHtml(copy.summary)}</p>`;
+    }
+
     if (copy?.body) {
       const excerpt = copy.body.slice(0, 120) + (copy.body.length > 120 ? "…" : "");
       html += `
@@ -171,6 +213,22 @@ async function renderPreview(contentEl) {
               ? `<p class="preview-hashtags">${copy.hashtags.map((t) => escapeHtml(t)).join(" ")}</p>`
               : ""
           }
+        </div>
+      `;
+    }
+
+    if (copy?.sections?.length) {
+      html += `
+        <div class="preview-sections">
+          <p class="preview-structure-label">正文结构 · ${copy.sections.length} 节</p>
+          <ul class="preview-structure-list">
+            ${copy.sections
+              .map(
+                (section) =>
+                  `<li><span class="preview-page-role">§</span> ${escapeHtml(section.heading || "未命名小节")}</li>`
+              )
+              .join("")}
+          </ul>
         </div>
       `;
     }

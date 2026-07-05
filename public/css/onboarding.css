@@ -1,0 +1,100 @@
+/* ── Product tour / onboarding ─────────────────────────────── */
+
+.onboarding-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.onboarding-spotlight {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.68);
+  pointer-events: none;
+  transition:
+    top 0.25s ease,
+    left 0.25s ease,
+    width 0.25s ease,
+    height 0.25s ease;
+}
+
+.onboarding-tooltip {
+  position: fixed;
+  width: min(320px, calc(100vw - 24px));
+  padding: var(--space-md);
+  border-radius: 12px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  transition:
+    top 0.25s ease,
+    left 0.25s ease;
+}
+
+.onboarding-tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+}
+
+.onboarding-tooltip.is-bottom .onboarding-tooltip-arrow {
+  top: -16px;
+  border-bottom-color: var(--color-surface, #fff);
+}
+
+.onboarding-tooltip.is-top .onboarding-tooltip-arrow {
+  bottom: -16px;
+  border-top-color: var(--color-surface, #fff);
+}
+
+.onboarding-tooltip.is-left .onboarding-tooltip-arrow {
+  right: -16px;
+  top: 50%;
+  margin-top: -8px;
+  border-left-color: var(--color-surface, #fff);
+}
+
+.onboarding-tooltip.is-right .onboarding-tooltip-arrow {
+  left: -16px;
+  top: 50%;
+  margin-top: -8px;
+  border-right-color: var(--color-surface, #fff);
+}
+
+.onboarding-step-label {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary, #888);
+}
+
+.onboarding-tooltip-title {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-lg, 18px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.onboarding-tooltip-body {
+  margin: 0 0 var(--space-md);
+  font-size: var(--font-size-sm, 14px);
+  line-height: 1.6;
+  color: var(--color-text-secondary, #444);
+}
+
+.onboarding-tooltip-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.onboarding-skip-btn {
+  font-size: var(--font-size-sm, 14px);
+}
+
+.onboarding-next-btn {
+  min-width: 96px;
+}

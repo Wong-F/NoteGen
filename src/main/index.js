@@ -1,8 +1,21 @@
 const { app, BrowserWindow } = require("electron");
-const path = require("path");
+const os = require("node:os");
+const path = require("node:path");
 const { registerRoutes } = require("../routes");
 const { createServices } = require("../services");
 const { renderDeckToPng } = require("./renderWorker");
+
+// Keep workspaces/personas in the default userData dir; isolate Chromium cache in dev only.
+if (!app.isPackaged) {
+  const cacheRoot = path.join(os.tmpdir(), "notegen-chromium-cache");
+  app.commandLine.appendSwitch("disk-cache-dir", path.join(cacheRoot, "disk"));
+  app.commandLine.appendSwitch("gpu-shader-disk-cache-dir", path.join(cacheRoot, "gpu"));
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 /** @type {import('electron').BrowserWindow | null} */
 let mainWindow = null;
@@ -36,23 +49,34 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  const userDataDir = app.getPath("userData");
-  const services = createServices({
-    userDataDir,
-    renderDeckFn: renderDeckToPng,
-    isDev: !app.isPackaged,
+if (gotSingleInstanceLock) {
+  app.whenReady().then(() => {
+    const userDataDir = app.getPath("userData");
+    const services = createServices({
+      userDataDir,
+      renderDeckFn: renderDeckToPng,
+      isDev: !app.isPackaged,
+    });
+    registerRoutes(services);
+
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
   });
-  registerRoutes(services);
 
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
     }
   });
-});
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

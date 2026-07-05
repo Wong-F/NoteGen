@@ -77,6 +77,28 @@ describe("CardService", () => {
     assert.equal(plan.pages[1].searchKeyword, "咖啡店");
   });
 
+  it("planPages falls back to persona visual accent", async () => {
+    const promptsDir = path.join(__dirname, "../prompts");
+    const templatesDir = path.join(__dirname, "../templates");
+    const aiNoAccent = {
+      completeJson: async () => ({ pages: mockPlan.pages }),
+    };
+    const service = new CardService(
+      aiNoAccent,
+      { importUserImage: () => {} },
+      { userDataDir: makeTmpDir(), promptsDir, templatesDir }
+    );
+
+    const plan = await service.planPages({
+      title: "周末探店",
+      body: "三家咖啡店推荐",
+      hashtags: ["#探店"],
+      persona: { name: "测试", platform: "xiaohongshu", visualAccent: "forest" },
+    });
+
+    assert.equal(plan.accent, "forest");
+  });
+
   it("buildDeckHtml writes index.html with poster sections", () => {
     const userData = makeTmpDir();
     const promptsDir = path.join(__dirname, "../prompts");

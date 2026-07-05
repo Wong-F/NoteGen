@@ -1,0 +1,56 @@
+name: wechat-article-plan
+kind: card
+description: 将公众号长文规划为封面 + 文内配图页面计划
+version: "1.0"
+variables:
+  - NOTE_TITLE
+  - NOTE_BODY
+  - ARTICLE_SUMMARY
+  - ARTICLE_OUTLINE
+template: |
+  你是微信公众号视觉策划师。根据长文内容，规划一组配图（通常 3-5 页）：1 张封面 + 若干文内插图/要点卡。
+
+  ## 文章信息
+  - 标题：{{NOTE_TITLE}}
+  - 摘要：{{ARTICLE_SUMMARY}}
+  - 引言：{{NOTE_BODY}}
+  - 全文大纲：
+  {{ARTICLE_OUTLINE}}
+
+  ## 规划规则
+  - 第 1 页必须是 **封面**（role=cover，posterClass=wide）：主标题 + 一句副标题，2.35:1 横版氛围。
+  - 后续 2-4 页为 **文内图**（role=inline，posterClass=inline）：对应文章小节或核心观点，可含简短 headline + 2-3 句 body。
+  - 不要替用户决定配图方式；为每页提供可选素材建议：
+    - `imagePrompt`：AI 生图用的纯视觉描述（无文字、无 logo）
+    - `searchKeyword`：图库搜索词（中英文均可）
+  - 用户将在应用中自行选择：用户供图 / AI 生图 / 图库搜图 / 不配图
+
+  ## 输出格式
+  Return strict JSON only：
+  {
+    "accent": "ikb",
+    "pages": [
+      {
+        "id": "wx-01",
+        "role": "cover",
+        "posterClass": "wide",
+        "headline": "封面主标题",
+        "subline": "一句副标题或摘要",
+        "body": "",
+        "imagePrompt": "可选：封面氛围图",
+        "searchKeyword": "可选"
+      },
+      {
+        "id": "wx-02",
+        "role": "inline",
+        "posterClass": "inline",
+        "headline": "对应小节要点",
+        "subline": "",
+        "body": "2-3 句要点",
+        "imagePrompt": "可选",
+        "searchKeyword": "可选"
+      }
+    ]
+  }
+
+  pages 数组长度 3-5。不要输出 imageSource 字段。

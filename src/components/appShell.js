@@ -8,8 +8,12 @@ import { mountPreviewPanel } from "./previewPanel.js";
 
 import { mountSettingsPanel } from "./settingsPanel.js";
 
+import { mountPersonaPanel } from "./personaPanel.js";
+
 import { initWorkspaceStore, createWorkspace } from "./workspaceStore.js";
+import { initPersonaStore } from "./personaStore.js";
 import { appState, subscribe } from "./appState.js";
+import { maybeStartWelcomeTour } from "./onboardingTour.js";
 
 
 
@@ -53,7 +57,9 @@ export function mountApp(root, options = {}) {
 
 
 
-  mountSidebar(sidebarRoot);
+  const personaPanel = mountPersonaPanel(root);
+
+  mountSidebar(sidebarRoot, { openPersonaPanel: (opts) => personaPanel.open(opts) });
 
   mountWorkspace(centerRoot);
 
@@ -81,8 +87,7 @@ export function mountApp(root, options = {}) {
 
 
 
-  bootWorkspaces(centerRoot);
-
+  bootWorkspaces(centerRoot).then(() => maybeStartWelcomeTour());
 }
 
 
@@ -113,7 +118,7 @@ async function bootWorkspaces(centerRoot) {
 
         生成选题、撰写文案、制作配图——<br />
 
-        一切进度都会自动保存。
+        一切进度都会自动保存。运营人设可选，用于多账号口吻统一。
 
       </p>
 
@@ -159,6 +164,7 @@ async function bootWorkspaces(centerRoot) {
 
   if (window.noteGen?.invoke) {
 
+    await initPersonaStore();
     await initWorkspaceStore();
 
     document.dispatchEvent(
@@ -174,4 +180,3 @@ async function bootWorkspaces(centerRoot) {
   }
 
 }
-

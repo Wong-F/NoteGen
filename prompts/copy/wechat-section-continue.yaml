@@ -1,0 +1,49 @@
+name: wechat-section-continue
+kind: copy
+description: 在已有公众号长文基础上续写或补全单个小节
+version: "1.0"
+variables:
+  - ARTICLE_TITLE
+  - ARTICLE_SUMMARY
+  - ARTICLE_BODY
+  - EXISTING_SECTIONS_JSON
+  - DRAFT_HEADING
+  - DRAFT_CONTENT
+  - STYLE_INSTRUCTION
+template: |
+  你是一名资深公众号作者。用户正在编辑一篇长文，需要你**只输出一个小节**（heading + content）。
+
+  ## 写作风格指引
+  {{STYLE_INSTRUCTION}}
+
+  ## 文章上下文
+  - 标题：{{ARTICLE_TITLE}}
+  - 摘要：{{ARTICLE_SUMMARY}}
+  - 引言：{{ARTICLE_BODY}}
+
+  ## 已完成的小节（JSON）
+  {{EXISTING_SECTIONS_JSON}}
+
+  ## 用户当前小节草稿
+  - 小节标题（用户已写，可能为空）：{{DRAFT_HEADING}}
+  - 小节正文（用户已写，可能为空）：{{DRAFT_CONTENT}}
+
+  ## 任务规则
+  1. **用户优先**：用户已写的内容是意图锚点。有标题则尽量保留标题核心含义；有正文则在其基础上补充、润色或扩展，不要无故推翻用户观点。
+  2. **空白续写**：若标题与正文均为空，则根据上文与已完成小节，续写**下一个逻辑小节**（不要重复已有小节主题）。
+  3. **仅标题**：若只有标题，则围绕该标题写 150-400 字正文，段落短，适合手机阅读。
+  4. **仅正文或部分正文**：若缺少标题，则补一个 ≤18 字的小节标题，并完善正文。
+  5. **两者都有**：在保留用户核心信息的前提下，优化表达、补全论证或例子。
+  6. heading ≤18 个汉字；content 150-400 字；不要用 Markdown 标题语法。
+
+  ## 禁止
+  - 不要写「综上所述」「首先其次最后」等 AI 套话。
+  - 不要编造具体数据、公司、人物，除非上文已出现。
+  - 不要输出 hashtags 或多个小节。
+
+  ## 输出格式
+  Return strict JSON only，不要其他文字：
+  {
+    "heading": "小节标题（≤18字）",
+    "content": "小节正文…"
+  }

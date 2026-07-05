@@ -13,9 +13,8 @@ const {
   getOutputDir,
   ensureDir,
 } = require("./draftPaths");
-
-const PAGE_PLAN_KIND = "card";
-const PAGE_PLAN_NAME = "xiaohongshu-page-plan";
+const { appendPersonaBlock } = require("./personaContext");
+const { resolvePlatformPack } = require("./platformPacks");
 
 class CardService {
   /**
@@ -34,21 +33,25 @@ class CardService {
   }
 
   /**
-   * @param {{ title: string; body: string; hashtags?: string[] }} copy
+   * @param {{ title: string; body: string; summary?: string; sections?: Array<{ heading: string; content: string }>; hashtags?: string[]; persona?: object | null; workflowType?: string }} copy
    */
   buildPlanMessages(copy) {
     const title = copy.title?.trim();
     const body = copy.body?.trim();
-    if (!title || !body) {
-      throw new Error("请先在 Step 2 生成笔记文案");
+    const sections = copy.sections || [];
+    if (!title || (!body && !sections.length)) {
+      throw new Error("请先在 Step 2 生成文案");
     }
 
-    const hashtags = (copy.hashtags || []).join(" ");
-    const userContent = this.promptCatalog.renderPrompt(PAGE_PLAN_KIND, PAGE_PLAN_NAME, {
-      NOTE_TITLE: title,
-      NOTE_BODY: body,
-      HASHTAGS: hashtags,
-    });
+    const pack = resolvePlatformPack(copy);
+    const vars = pack.formatCopyForCardPlan(copy);
+
+    let userContent = this.promptCatalog.renderPrompt(
+      pack.prompts.card.kind,
+      pack.prompts.card.name,
+      vars
+    );
+    userContent = appendPersonaBlock(userContent, copy.persona);
 
     return [
       {
@@ -62,24 +65,36 @@ class CardService {
 
   /**
    * @param {unknown} raw
+   * @param {object | null | undefined} [persona]
+   * @param {{ workflowType?: string; persona?: object | null }} [context]
    */
-  normalizePlan(raw) {
+  normalizePlan(raw, persona, context = {}) {
     if (!raw || typeof raw !== "object") {
       throw new Error("页面计划格式无效");
     }
+    const pack = resolvePlatformPack({ ...context, persona });
     const data = /** @type {Record<string, unknown>} */ (raw);
     const pages = Array.isArray(data.pages) ? data.pages : [];
     if (!pages.length) {
       throw new Error("页面计划为空");
     }
 
+    const idPrefix = pack.id === "wechat" ? "wx" : "xhs";
+
     return {
-      accent: String(data.accent || "ikb"),
+      accent: String(data.accent || persona?.visualAccent || "ikb"),
+      platform: pack.id,
+      deckShell: pack.deckShell,
+      defaultPosterClass: pack.defaultPosterClass,
       pages: pages.map((entry, index) => {
         const page = /** @type {Record<string, unknown>} */ (entry || {});
+        const role = String(page.role || (index === 0 ? "cover" : "content"));
         return {
-          id: String(page.id || `xhs-${String(index + 1).padStart(2, "0")}`),
-          role: String(page.role || (index === 0 ? "cover" : "content")),
+          id: String(page.id || `${idPrefix}-${String(index + 1).padStart(2, "0")}`),
+          role,
+          posterClass: String(
+            page.posterClass || page.poster_class || pack.defaultPosterClass
+          ).trim(),
           headline: String(page.headline || "").trim(),
           subline: String(page.subline || "").trim(),
           body: String(page.body || "").trim(),
@@ -94,12 +109,12 @@ class CardService {
   }
 
   /**
-   * @param {{ title: string; body: string; hashtags?: string[] }} copy
+   * @param {{ title: string; body: string; summary?: string; sections?: Array<{ heading: string; content: string }>; hashtags?: string[]; persona?: object | null; workflowType?: string }} copy
    */
   async planPages(copy) {
     const messages = this.buildPlanMessages(copy);
     const raw = await this.aiService.completeJson(messages, { temperature: 0.5 });
-    return this.normalizePlan(raw);
+    return this.normalizePlan(raw, copy.persona, copy);
   }
 
   /**
@@ -114,11 +129,13 @@ class CardService {
     ensureDir(draftDir);
     ensureDir(assetsDir);
 
-    const shellPath = path.join(this.templatesDir, "xhs-deck-shell.html");
+    const shellName = payload.plan.deckShell || "xhs-deck-shell.html";
+    const shellPath = path.join(this.templatesDir, shellName);
     let shellHtml = fs.readFileSync(shellPath, "utf8");
     shellHtml = shellHtml.replace(/data-accent="[^"]+"/, `data-accent="${payload.plan.accent}"`);
 
     const pageAssets = payload.pageAssets || {};
+    const defaultPosterClass = payload.plan.defaultPosterClass || "xhs";
     const postersHtml = payload.plan.pages
       .map((page, index) => {
         const abs = pageAssets[page.id] || page.imageAbsolutePath;
@@ -129,7 +146,8 @@ class CardService {
             imageAbsolutePath: abs || "",
             imageRelativePath: rel,
           },
-          index
+          index,
+          { defaultPosterClass: page.posterClass || defaultPosterClass }
         );
       })
       .join("\n");
@@ -167,4 +185,4 @@ class CardService {
   }
 }
 
-module.exports = { CardService, PAGE_PLAN_NAME };
+module.exports = { CardService };
