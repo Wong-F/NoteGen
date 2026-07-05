@@ -41,7 +41,7 @@ export function mountPersonaPanel(root) {
       </div>
       <div class="settings-drawer-body persona-drawer-body">
         <div id="persona-list-view">
-          <p class="persona-hint">运营人设是<strong>可选</strong>的：可用于统一口吻与读者画像；不选择时也可直接在 Workspace 自由创作。</p>
+          <p class="persona-hint">运营人设是<strong>可选</strong>的：可用于统一口吻与读者画像；不选择时也可直接在创作区自由创作。</p>
           <button type="button" id="persona-clear-btn" class="persona-clear-btn">不使用运营人设</button>
           <ul id="persona-list" class="persona-list"></ul>
           <button type="button" id="persona-add-btn" class="sidebar-new-btn">+ 新建运营人设</button>

@@ -1234,6 +1234,12 @@ button.is-loading::after {
   color: var(--color-text-secondary);
 }
 
+.settings-help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
 .settings-group label {
   display: block;
   margin-bottom: var(--space-xs);

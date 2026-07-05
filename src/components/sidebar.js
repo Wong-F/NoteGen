@@ -40,11 +40,11 @@ import { escapeHtml, escapeAttr } from "./utils.js";
 
 const SECTIONS = [
 
-  { id: "idea", label: "Idea", labelZh: "选题" },
+  { id: "idea", label: "选题" },
 
-  { id: "writing", label: "Writing", labelZh: "文案" },
+  { id: "writing", label: "文案" },
 
-  { id: "images", label: "Images", labelZh: "配图" },
+  { id: "images", label: "配图" },
 
 ];
 
@@ -96,13 +96,13 @@ export function mountSidebar(root, options = {}) {
 
       <section class="sidebar-section">
 
-        <p class="sidebar-heading">Workspace</p>
+        <p class="sidebar-heading">创作</p>
 
         <input type="search" id="workspace-search" class="sidebar-search"
 
           placeholder="搜索创作…" autocomplete="off" aria-label="搜索创作" />
 
-        <button type="button" id="new-workspace-btn" class="sidebar-new-btn">+ New Workspace</button>
+        <button type="button" id="new-workspace-btn" class="sidebar-new-btn">+ 新建创作</button>
 
         <button type="button" id="new-workspace-persona-btn" class="sidebar-new-persona-btn" hidden>
 
@@ -116,7 +116,7 @@ export function mountSidebar(root, options = {}) {
 
       <section class="sidebar-section" id="sidebar-recent-section">
 
-        <p class="sidebar-heading">Recent</p>
+        <p class="sidebar-heading">最近</p>
 
         <ul class="sidebar-list" id="workspace-list"></ul>
 
@@ -126,7 +126,7 @@ export function mountSidebar(root, options = {}) {
 
       <section class="sidebar-section sidebar-workflow" id="workflow-section" hidden>
 
-        <p class="sidebar-heading">Current Workflow</p>
+        <p class="sidebar-heading">当前流程</p>
 
         <button type="button" id="workspace-bind-btn" class="sidebar-rebind-btn" hidden>
 
@@ -641,8 +641,6 @@ function renderWorkflow(listEl, sectionEl, personaActions = {}) {
             ${statusIcon ? `<span class="sidebar-check">${statusIcon}</span>` : ""}
 
             <span class="sidebar-item-name">${section.label}</span>
-
-            <span class="sidebar-item-zh">${section.labelZh}</span>
 
           </span>
 

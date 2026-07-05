@@ -3,7 +3,7 @@ import { replayWelcomeTour } from "./onboardingTour.js";
 /**
  * Mount settings drawer (triggered from header).
  * @param {HTMLElement} root — app root for overlay placement
- * @param {{ onLogout?: () => void }} [options]
+ * @param {{ onLogout?: () => void; openManual?: () => void }} [options]
  * @returns {{ open: () => void; close: () => void }}
  */
 export function mountSettingsPanel(root, options = {}) {
@@ -19,10 +19,15 @@ export function mountSettingsPanel(root, options = {}) {
       <div class="settings-drawer-body">
         <section class="settings-group">
           <h3 class="settings-group-title">帮助</h3>
-          <p class="settings-help-text">需要回顾界面说明时，可重新观看新手教程。</p>
-          <button id="settings-replay-tour-btn" type="button" class="btn-secondary">
-            重新观看新手教程
-          </button>
+          <p class="settings-help-text">需要详细说明时，可打开使用手册；也可重新观看新手教程。</p>
+          <div class="settings-help-actions">
+            <button id="settings-open-manual-btn" type="button" class="btn-secondary">
+              打开使用手册
+            </button>
+            <button id="settings-replay-tour-btn" type="button" class="btn-secondary">
+              重新观看新手教程
+            </button>
+          </div>
         </section>
         <section class="settings-group">
           <h3 class="settings-group-title">账户</h3>
@@ -84,6 +89,7 @@ export function mountSettingsPanel(root, options = {}) {
   const stockTestBtn = overlay.querySelector("#stock-test-btn");
   const saveBtn = overlay.querySelector("#settings-save-btn");
   const replayTourBtn = overlay.querySelector("#settings-replay-tour-btn");
+  const openManualBtn = overlay.querySelector("#settings-open-manual-btn");
   const statusEl = overlay.querySelector("#settings-status");
 
   function renderAccountCard(profile) {
@@ -253,6 +259,11 @@ export function mountSettingsPanel(root, options = {}) {
     } catch (error) {
       statusEl.textContent = `无法启动教程：${error.message}`;
     }
+  });
+
+  openManualBtn.addEventListener("click", () => {
+    close();
+    options.openManual?.();
   });
 
   return { open, close };

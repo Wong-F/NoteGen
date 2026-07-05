@@ -249,9 +249,9 @@ function getIdeaHtml() {
         value="${escapeAttr(input.targetReader)}" />
       <div class="field-row">
         <select id="hook-level-select" class="field-select">
-          <option value="1" ${input.hookLevel === 1 ? "selected" : ""}>钩子 Level 1 · 克制可信</option>
-          <option value="2" ${input.hookLevel === 2 ? "selected" : ""}>钩子 Level 2 · 抓人有对比</option>
-          <option value="3" ${input.hookLevel === 3 ? "selected" : ""}>钩子 Level 3 · 高张力</option>
+          <option value="1" ${input.hookLevel === 1 ? "selected" : ""}>钩子等级 1 · 克制可信</option>
+          <option value="2" ${input.hookLevel === 2 ? "selected" : ""}>钩子等级 2 · 抓人有对比</option>
+          <option value="3" ${input.hookLevel === 3 ? "selected" : ""}>钩子等级 3 · 高张力</option>
         </select>
         <button id="topics-suggest-btn" type="button" class="btn-primary">生成选题</button>
       </div>

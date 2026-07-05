@@ -14,6 +14,7 @@ import { initWorkspaceStore, createWorkspace } from "./workspaceStore.js";
 import { initPersonaStore } from "./personaStore.js";
 import { appState, subscribe } from "./appState.js";
 import { maybeStartWelcomeTour } from "./onboardingTour.js";
+import { mountUserManual } from "./userManual.js";
 
 
 
@@ -81,11 +82,15 @@ export function mountApp(root, options = {}) {
 
 
 
-  const settings = mountSettingsPanel(root, { onLogout: options.onLogout });
+  const userManual = mountUserManual(root);
+  const settings = mountSettingsPanel(root, {
+    onLogout: options.onLogout,
+    openManual: () => userManual.open(),
+  });
 
   root.querySelector("#settings-toggle").addEventListener("click", () => settings.open());
 
-
+  window.noteGen?.onMenuAction?.("app:openManual", () => userManual.open());
 
   bootWorkspaces(centerRoot).then(() => maybeStartWelcomeTour());
 }
@@ -122,7 +127,7 @@ async function bootWorkspaces(centerRoot) {
 
       </p>
 
-      <button type="button" id="empty-new-workspace-btn" class="btn-primary">New Workspace</button>
+      <button type="button" id="empty-new-workspace-btn" class="btn-primary">新建创作</button>
 
     </div>
 

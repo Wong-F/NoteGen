@@ -228,7 +228,7 @@ function getWelcomeSteps() {
       selector: "#empty-new-workspace-btn",
       altSelectors: ["#new-workspace-btn"],
       title: "从这里开始创作",
-      body: "点击「New Workspace」创建你的第一个笔记项目，之后所有进度都会自动保存。",
+      body: "点击「新建创作」创建你的第一个笔记项目，之后所有进度都会自动保存。",
       placement: "bottom",
     },
     {
@@ -239,7 +239,7 @@ function getWelcomeSteps() {
     },
     {
       selector: "#sidebar-recent-section",
-      title: "Recent · 历史创作",
+      title: "最近 · 历史创作",
       body: "你创建过的项目会出现在这里，随时点击切换继续编辑。",
       placement: "right",
     },

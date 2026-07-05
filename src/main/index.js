@@ -4,6 +4,7 @@ const path = require("node:path");
 const { registerRoutes } = require("../routes");
 const { createServices } = require("../services");
 const { renderDeckToPng } = require("./renderWorker");
+const { setAppMenu } = require("./appMenu");
 
 // Keep workspaces/personas in the default userData dir; isolate Chromium cache in dev only.
 if (!app.isPackaged) {
@@ -46,7 +47,10 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    setAppMenu(null);
   });
+
+  setAppMenu(mainWindow);
 }
 
 if (gotSingleInstanceLock) {
