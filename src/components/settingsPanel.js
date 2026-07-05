@@ -1,7 +1,7 @@
 import { replayWelcomeTour } from "./onboardingTour.js";
 
 /**
- * Mount settings drawer (triggered from header).
+ * Mount settings drawer (triggered from sidebar user bar).
  * @param {HTMLElement} root — app root for overlay placement
  * @param {{ onLogout?: () => void; openManual?: () => void }} [options]
  * @returns {{ open: () => void; close: () => void }}

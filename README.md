@@ -18,10 +18,12 @@ npm run dev
 | 模块 | 说明 |
 |------|------|
 | **Workspace** | 创作项目，自动保存选题 / 文案 / 配图进度 |
-| **运营人设** | 可选，多账号口吻与平台（小红书 / 公众号） |
-| **三步流程** | 选题 → 成文/文案 → 配图 → 右侧预览与导出 |
+| **运营人设** | 可选，多账号口吻与平台；绑定后自动带入选题「领域关键词 / 目标读者」 |
+| **三步流程** | 选题 → 成文/文案 → 配图 → 右侧 **预览 / 对话** 与导出 |
 | **Platform Pack** | 按平台切换 prompt、文案结构、导出与卡片模板 |
 | **公众号长文** | 标题 / 摘要 / 引言 / 多小节 `sections[]`，支持小节「继续生成」 |
+| **配图** | 工作区缩略图；图库/AI 可选返回 1–6 张候选再绑定 |
+| **AI 对话** | 右栏「对话」标签，结合当前创作与人设上下文 |
 | **导出** | 复制文案或导出到文件夹（含 manifest） |
 | **新手教程** | 首次进主界面 + 首次新建 Workspace；设置中可「重新观看」 |
 
@@ -56,9 +58,21 @@ docs/             # 开发文档（英文详版见 docs/README.md）
 | 命令 | 说明 |
 |------|------|
 | `npm run dev` | 开发模式启动 Electron |
-| `npm test` | 运行单元测试（117+ 项） |
+| `npm test` | 运行单元测试（125+ 项） |
 | `npm run build` | 构建主进程与渲染进程 |
 | `npm run dist` | 打包 Windows 安装程序 |
+
+## 当前阶段（2026-07-05）
+
+| 维度 | 状态 |
+|------|------|
+| **产品阶段** | Phase 1（本地 AI 创作流水线）已完成；Phase 2（后端登录 / 密钥激活）**测试环境进行中**，尚未交给终端用户 |
+| **版本** | 目标 **0.1.1**（Workspace、登录鉴权、人设、公众号、新手引导）；`package.json` 仍为 0.1.0 |
+| **后端** | SIT：`http://sit.xslq.work/sit/interface/api/publickey/normaltoken`，待真实测试密钥联调 |
+| **设备码** | API 字段 `imei`：优先物理网卡 MAC（`AABBCCDDEEFF`），无 MAC 时回退 UUID；已缓存的 UUID 与 MAC **并行共存**（测试期可接受） |
+| **待办** | SIT 联调、能量点扣费、用户自填 API Key（0.2.0） |
+
+详表见 [docs/README.md — Development phases](./docs/README.md#development-phases) 与 [Authentication](./docs/README.md#authentication)。
 
 ## 开发文档
 

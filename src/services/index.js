@@ -12,6 +12,7 @@ const { WorkspaceStoreService } = require("./workspaceStoreService");
 const { PersonaStoreService } = require("./personaStoreService");
 const { AuthService } = require("./authService");
 const { OnboardingService } = require("./onboardingService");
+const { ChatService } = require("./chatService");
 const path = require("node:path");
 
 /**
@@ -30,6 +31,7 @@ const path = require("node:path");
  * @property {PersonaStoreService} personaStoreService
  * @property {AuthService} authService
  * @property {OnboardingService} onboardingService
+ * @property {ChatService} chatService
  */
 
 /**
@@ -74,6 +76,7 @@ function createServices({ userDataDir, promptsDir, writersDir, templatesDir, ren
     personaStoreService: new PersonaStoreService(userDataDir),
     authService: new AuthService(userDataDir, { isDev }),
     onboardingService: new OnboardingService(userDataDir),
+    chatService: new ChatService(aiService),
   };
 }
 

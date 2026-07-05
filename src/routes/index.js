@@ -47,6 +47,10 @@ function registerRoutes(services) {
     return services.aiService.testConnection();
   });
 
+  ipcMain.handle("chat:send", async (_event, payload) => {
+    return services.chatService.send(payload || {}, services.personaStoreService);
+  });
+
   ipcMain.handle("topics:suggest", async (_event, payload) => {
     const persona = resolvePersona(services.personaStoreService, payload?.personaId);
     return services.topicService.suggest({ ...payload, persona });
@@ -107,23 +111,69 @@ function registerRoutes(services) {
   });
 
   ipcMain.handle("images:generate", async (_event, payload) => {
-    return services.imageService.generateImage(payload);
+    const count = Number(payload?.count) || 1;
+    if (count > 1) {
+      return services.imageService.generateImages(payload);
+    }
+    const single = await services.imageService.generateImage(payload);
+    return {
+      sessionId: single.sessionId,
+      images: [
+        {
+          filename: single.filename,
+          absolutePath: single.absolutePath,
+          relativePath: single.relativePath,
+        },
+      ],
+    };
   });
 
   ipcMain.handle("images:searchStock", async (_event, payload) => {
     return services.stockImageService.searchAndDownload(payload);
   });
 
+  ipcMain.handle("images:searchStockCandidates", async (_event, payload) => {
+    const candidates = await services.stockImageService.searchCandidates(
+      payload?.keyword,
+      payload?.count
+    );
+    return { candidates };
+  });
+
+  ipcMain.handle("images:downloadStockCandidate", async (_event, payload) => {
+    return services.stockImageService.downloadCandidate(payload?.candidate, {
+      sessionId: payload?.sessionId,
+      label: payload?.label,
+    });
+  });
+
   ipcMain.handle("images:previewDataUrl", async (_event, payload) => {
-    const absolutePath = payload?.absolutePath;
+    const absolutePath = payload?.absolutePath || payload?.filePath;
     if (!absolutePath || !fs.existsSync(absolutePath)) {
-      throw new Error("???????");
+      throw new Error("预览图片不存在");
     }
     const buffer = fs.readFileSync(absolutePath);
     const ext = path.extname(absolutePath).toLowerCase();
     const mime =
       ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : ext === ".gif" ? "image/gif" : "image/jpeg";
     return `data:${mime};base64,${buffer.toString("base64")}`;
+  });
+
+  ipcMain.handle("images:fetchRemoteDataUrl", async (_event, payload) => {
+    const url = payload?.url?.trim();
+    if (!url || !/^https?:\/\//i.test(url)) {
+      throw new Error("无效的远程图片地址");
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`下载预览失败：HTTP ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > 8 * 1024 * 1024) {
+      throw new Error("预览图片过大");
+    }
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    return `data:${contentType.split(";")[0]};base64,${buffer.toString("base64")}`;
   });
 
   ipcMain.handle("stock:testConnection", async () => {

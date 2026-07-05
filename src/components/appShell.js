@@ -4,7 +4,7 @@ import { mountSidebar } from "./sidebar.js";
 
 import { mountWorkspace } from "./workspace.js";
 
-import { mountPreviewPanel } from "./previewPanel.js";
+import { mountRightPanel } from "./rightPanel.js";
 
 import { mountSettingsPanel } from "./settingsPanel.js";
 
@@ -34,13 +34,9 @@ export function mountApp(root, options = {}) {
 
       <div class="header-brand">
 
-        <h1 class="header-logo">noteGen</h1>
+        <h1 class="header-logo">笔记坊</h1>
 
       </div>
-
-      <button id="settings-toggle" type="button" class="btn-ghost header-settings-btn"
-
-        aria-label="设置">设置</button>
 
     </header>
 
@@ -60,11 +56,20 @@ export function mountApp(root, options = {}) {
 
   const personaPanel = mountPersonaPanel(root);
 
-  mountSidebar(sidebarRoot, { openPersonaPanel: (opts) => personaPanel.open(opts) });
+  const userManual = mountUserManual(root);
+  const settings = mountSettingsPanel(root, {
+    onLogout: options.onLogout,
+    openManual: () => userManual.open(),
+  });
+
+  mountSidebar(sidebarRoot, {
+    openPersonaPanel: (opts) => personaPanel.open(opts),
+    openSettings: () => settings.open(),
+  });
 
   mountWorkspace(centerRoot);
 
-  mountPreviewPanel(previewRoot);
+  mountRightPanel(previewRoot);
 
 
 
@@ -81,14 +86,6 @@ export function mountApp(root, options = {}) {
   });
 
 
-
-  const userManual = mountUserManual(root);
-  const settings = mountSettingsPanel(root, {
-    onLogout: options.onLogout,
-    openManual: () => userManual.open(),
-  });
-
-  root.querySelector("#settings-toggle").addEventListener("click", () => settings.open());
 
   window.noteGen?.onMenuAction?.("app:openManual", () => userManual.open());
 
@@ -133,7 +130,8 @@ async function bootWorkspaces(centerRoot) {
 
   `;
 
-  centerRoot.appendChild(emptyEl);
+  const scrollRoot = centerRoot.querySelector("#workspace-scroll") || centerRoot;
+  scrollRoot.appendChild(emptyEl);
 
 
 

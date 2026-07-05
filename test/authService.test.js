@@ -7,7 +7,35 @@ const {
   AuthService,
   DEV_BYPASS_PHONE,
   SCRIPT_TYPE,
+  resolvePhysicalMacAddress,
 } = require("../src/services/authService");
+
+const MOCK_INTERFACES = {
+  "vEthernet (WSL)": [
+    {
+      address: "172.24.0.1",
+      family: "IPv4",
+      internal: false,
+      mac: "00:15:5d:00:00:01",
+    },
+  ],
+  以太网: [
+    {
+      address: "192.168.1.10",
+      family: "IPv4",
+      internal: false,
+      mac: "aa:bb:cc:dd:ee:ff",
+    },
+  ],
+  "Wi-Fi": [
+    {
+      address: "192.168.1.20",
+      family: "IPv4",
+      internal: false,
+      mac: "11:22:33:44:55:66",
+    },
+  ],
+};
 
 const tmpDirs = [];
 
@@ -24,13 +52,20 @@ after(() => {
 });
 
 describe("AuthService", () => {
-  it("persists a stable device id", () => {
+  it("persists a stable device id from physical MAC", () => {
     const dir = makeTmpDir();
-    const service = new AuthService(dir);
+    const service = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
     const first = service.getDeviceId();
     const second = service.getDeviceId();
-    assert.match(first, /^[0-9a-f-]{36}$/i);
+    assert.equal(first, "AABBCCDDEEFF");
     assert.equal(first, second);
+  });
+
+  it("prefers Ethernet MAC over Wi-Fi and skips virtual adapters", () => {
+    const mac = resolvePhysicalMacAddress(MOCK_INTERFACES);
+    assert.equal(mac, "AABBCCDDEEFF");
   });
 
   it("maps backend error messages to user-friendly text", () => {

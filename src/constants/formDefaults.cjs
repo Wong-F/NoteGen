@@ -38,6 +38,12 @@ const IDEA_TEMPLATES = {
   },
 };
 
+const TITLE_STYLE_OPTIONS = [
+  { level: 1, label: "克制可信" },
+  { level: 2, label: "抓人有对比" },
+  { level: 3, label: "高张力" },
+];
+
 function getPersonaTemplate(platform = "xiaohongshu") {
   const key = PERSONA_TEMPLATES[platform] ? platform : "xiaohongshu";
   return {
@@ -59,6 +65,43 @@ function fillIdeaInputDefaults(partial, workflowType = "xiaohongshu-note") {
     targetReader: partial?.targetReader?.trim() || defaults.targetReader,
     hookLevel: partial?.hookLevel ?? defaults.hookLevel,
   };
+}
+
+function buildKeywordsFromPersona(persona) {
+  if (!persona) {
+    return "";
+  }
+  const parts = [];
+  const primary = persona.primaryDomain?.trim();
+  if (primary) {
+    parts.push(primary);
+  }
+  if (Array.isArray(persona.secondaryDomains)) {
+    for (const domain of persona.secondaryDomains) {
+      const trimmed = String(domain).trim();
+      if (trimmed && !parts.includes(trimmed)) {
+        parts.push(trimmed);
+      }
+    }
+  }
+  return parts.join(", ");
+}
+
+function isIdeaInputAtDefaults(ideaInput, workflowType = "xiaohongshu-note") {
+  const defaults = getDefaultIdeaInput(workflowType);
+  const keywords = ideaInput?.keywords?.trim() || "";
+  const targetReader = ideaInput?.targetReader?.trim() || "";
+  const hookLevel = ideaInput?.hookLevel ?? defaults.hookLevel;
+  return (
+    (!keywords || keywords === defaults.keywords) &&
+    (!targetReader || targetReader === defaults.targetReader) &&
+    hookLevel === defaults.hookLevel
+  );
+}
+
+function formatTitleStyleLabel(level) {
+  const option = TITLE_STYLE_OPTIONS.find((item) => item.level === level);
+  return option ? `标题风格 · ${option.label}` : `标题风格 · ${level}`;
 }
 
 function mergePersonaSeed(seed = {}) {
@@ -93,8 +136,12 @@ function mergePersonaSeed(seed = {}) {
 module.exports = {
   PERSONA_TEMPLATES,
   IDEA_TEMPLATES,
+  TITLE_STYLE_OPTIONS,
   getPersonaTemplate,
   getDefaultIdeaInput,
   fillIdeaInputDefaults,
+  buildKeywordsFromPersona,
+  isIdeaInputAtDefaults,
+  formatTitleStyleLabel,
   mergePersonaSeed,
 };

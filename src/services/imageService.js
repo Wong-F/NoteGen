@@ -8,6 +8,19 @@ const { AiServiceError } = require("./aiService");
 const { getAssetsDir, ensureDir, resolveSessionId } = require("./draftPaths");
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const MAX_IMAGE_BATCH = 6;
+
+/**
+ * @param {number} count
+ * @param {number} [max]
+ */
+function clampImageCount(count, max = MAX_IMAGE_BATCH) {
+  const value = Number(count);
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(max, Math.max(1, Math.round(value)));
+}
 
 class ImageService {
   /**
@@ -66,15 +79,16 @@ class ImageService {
   }
 
   /**
-   * Generate an image via OpenAI-compatible /v1/images/generations.
-   * @param {{ prompt: string; sessionId?: string; label?: string; size?: string }} payload
+   * Generate one or more images via OpenAI-compatible /v1/images/generations.
+   * @param {{ prompt: string; sessionId?: string; label?: string; size?: string; count?: number }} payload
    */
-  async generateImage(payload) {
+  async generateImages(payload) {
     const prompt = payload.prompt?.trim();
     if (!prompt) {
       throw new Error("生图描述不能为空");
     }
 
+    const count = clampImageCount(payload.count);
     const config = this.resolveImageConfig();
     if (!config.baseUrl) {
       throw new AiServiceError("图像 API 地址未配置", "CONFIG");
@@ -92,7 +106,7 @@ class ImageService {
     const body = {
       model: config.model,
       prompt,
-      n: 1,
+      n: count,
       size: payload.size || "1024x1024",
       response_format: "b64_json",
     };
@@ -116,18 +130,8 @@ class ImageService {
     }
 
     const data = await response.json();
-    const b64 = data?.data?.[0]?.b64_json;
-    const imageUrl = data?.data?.[0]?.url;
-    let buffer;
-    if (b64) {
-      buffer = Buffer.from(b64, "base64");
-    } else if (imageUrl) {
-      const imgRes = await this.fetchImpl(imageUrl);
-      if (!imgRes.ok) {
-        throw new AiServiceError("下载生成的图片失败", "HTTP", { status: imgRes.status });
-      }
-      buffer = Buffer.from(await imgRes.arrayBuffer());
-    } else {
+    const items = Array.isArray(data?.data) ? data.data : [];
+    if (!items.length) {
       throw new AiServiceError("图像 API 未返回图片数据", "BAD_RESPONSE");
     }
 
@@ -135,19 +139,60 @@ class ImageService {
     const assetsDir = getAssetsDir(this.userDataDir, sessionId);
     ensureDir(assetsDir);
 
-    const base = (payload.label || `ai-${Date.now()}`).replace(/[^\w-]+/g, "-");
-    const filename = `${base}.png`;
-    const destPath = path.join(assetsDir, filename);
-    fs.writeFileSync(destPath, buffer);
+    const baseLabel = (payload.label || `ai-${Date.now()}`).replace(/[^\w-]+/g, "-");
+    /** @type {Array<{ filename: string; absolutePath: string; relativePath: string; prompt: string }>} */
+    const images = [];
 
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      const b64 = item?.b64_json;
+      const imageUrl = item?.url;
+      let buffer;
+      if (b64) {
+        buffer = Buffer.from(b64, "base64");
+      } else if (imageUrl) {
+        const imgRes = await this.fetchImpl(imageUrl);
+        if (!imgRes.ok) {
+          throw new AiServiceError("下载生成的图片失败", "HTTP", { status: imgRes.status });
+        }
+        buffer = Buffer.from(await imgRes.arrayBuffer());
+      } else {
+        continue;
+      }
+
+      const suffix = items.length > 1 ? `-${index + 1}` : "";
+      const filename = `${baseLabel}${suffix}.png`;
+      const destPath = path.join(assetsDir, filename);
+      fs.writeFileSync(destPath, buffer);
+      images.push({
+        filename,
+        absolutePath: destPath,
+        relativePath: `assets/${filename}`,
+        prompt,
+      });
+    }
+
+    if (!images.length) {
+      throw new AiServiceError("图像 API 未返回可用图片数据", "BAD_RESPONSE");
+    }
+
+    return { sessionId, images, prompt };
+  }
+
+  /**
+   * Generate a single image (compat wrapper).
+   * @param {{ prompt: string; sessionId?: string; label?: string; size?: string; count?: number }} payload
+   */
+  async generateImage(payload) {
+    const result = await this.generateImages({ ...payload, count: 1 });
     return {
-      sessionId,
-      filename,
-      absolutePath: destPath,
-      relativePath: `assets/${filename}`,
-      prompt,
+      sessionId: result.sessionId,
+      filename: result.images[0].filename,
+      absolutePath: result.images[0].absolutePath,
+      relativePath: result.images[0].relativePath,
+      prompt: result.prompt,
     };
   }
 }
 
-module.exports = { ImageService, IMAGE_EXTENSIONS };
+module.exports = { ImageService, IMAGE_EXTENSIONS, clampImageCount, MAX_IMAGE_BATCH };

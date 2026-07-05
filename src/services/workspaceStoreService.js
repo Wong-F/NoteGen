@@ -41,6 +41,7 @@ const RECENT_DISPLAY_LIMIT = 20;
  * @property {object | null} pagePlan
  * @property {Record<string, { absolutePath: string; relativePath: string; source: string }>} pageAssets
  * @property {Array<{ id: string; absolutePath: string }>} renderedImages
+ * @property {Array<{ role: "user" | "assistant"; content: string }>} chatMessages
  * @property {{ center: number; preview: number; sidebar: number }} scroll
  * @property {string[]} keywords
  * @property {string[]} tags
@@ -69,6 +70,7 @@ function createBlankWorkspaceState(id, workflowType = DEFAULT_WORKFLOW_TYPE) {
     pagePlan: null,
     pageAssets: {},
     renderedImages: [],
+    chatMessages: [],
     scroll: { center: 0, preview: 0, sidebar: 0 },
     keywords: [],
     tags: [],

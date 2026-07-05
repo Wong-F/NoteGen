@@ -1,5 +1,5 @@
 import { appState, subscribe, deriveWorkspaceTitle } from "./appState.js";
-import { escapeHtml } from "./utils.js";
+import { escapeHtml, escapeAttr } from "./utils.js";
 
 /**
  * Mount live preview panel with export actions.
@@ -8,7 +8,6 @@ import { escapeHtml } from "./utils.js";
 export function mountPreviewPanel(root) {
   root.innerHTML = `
     <div class="preview-panel">
-      <p class="preview-heading">预览</p>
       <div id="preview-content" class="preview-content preview-fade"></div>
       <div id="preview-export" class="preview-export" hidden>
         <p class="preview-export-label">发布导出</p>
@@ -31,11 +30,11 @@ export function mountPreviewPanel(root) {
   exportBtn.addEventListener("click", () => handleExportAll(exportBtn, exportStatus));
 
   subscribe(() => {
-    renderPreview(contentEl);
+    void renderPreview(contentEl);
     updateExportBar(exportBar);
   });
 
-  renderPreview(contentEl);
+  void renderPreview(contentEl);
   updateExportBar(exportBar);
 }
 
@@ -176,121 +175,175 @@ async function handleExportAll(exportBtn, statusEl) {
   }
 }
 
+/** @type {number} */
+let previewRenderGeneration = 0;
+
 /** @param {HTMLElement} contentEl */
 async function renderPreview(contentEl) {
+  const generation = ++previewRenderGeneration;
   contentEl.classList.add("preview-fade");
 
-  const copy = appState.copyDraft;
-  const topic = appState.selectedTopic;
-  const plan = appState.pagePlan;
-  const images = appState.renderedImages;
+  try {
+    const copy = appState.copyDraft;
+    const topic = appState.selectedTopic;
+    const plan = appState.pagePlan;
+    const images = appState.renderedImages;
+    const pageAssets = appState.pageAssets || {};
 
-  let html = "";
+    let html = "";
 
-  if (!topic && !copy && images.length === 0) {
-    html = `<p class="preview-empty">开始创作后，这里会实时显示笔记效果</p>`;
-  } else {
-    if (copy?.title || topic?.title) {
-      html += `
-        <div class="preview-cover">
-          <p class="preview-cover-label">封面</p>
-          <p class="preview-cover-title">${escapeHtml(copy?.title || topic?.title || "")}</p>
-        </div>
-      `;
-    }
+    if (!topic && !copy && images.length === 0 && !plan?.pages?.length) {
+      html = `<p class="preview-empty">开始创作后，这里会实时显示笔记效果</p>`;
+    } else {
+      if (copy?.title || topic?.title) {
+        html += `
+          <div class="preview-cover">
+            <p class="preview-cover-label">封面</p>
+            <p class="preview-cover-title">${escapeHtml(copy?.title || topic?.title || "")}</p>
+          </div>
+        `;
+      }
 
-    if (copy?.summary) {
-      html += `<p class="preview-summary">${escapeHtml(copy.summary)}</p>`;
-    }
+      if (copy?.summary) {
+        html += `<p class="preview-summary">${escapeHtml(copy.summary)}</p>`;
+      }
 
-    if (copy?.body) {
-      const excerpt = copy.body.slice(0, 120) + (copy.body.length > 120 ? "…" : "");
-      html += `
-        <div class="preview-copy">
-          <p class="preview-copy-body">${escapeHtml(excerpt)}</p>
-          ${
-            copy.hashtags?.length
-              ? `<p class="preview-hashtags">${copy.hashtags.map((t) => escapeHtml(t)).join(" ")}</p>`
-              : ""
-          }
-        </div>
-      `;
-    }
+      if (copy?.body) {
+        const excerpt = copy.body.slice(0, 120) + (copy.body.length > 120 ? "…" : "");
+        html += `
+          <div class="preview-copy">
+            <p class="preview-copy-body">${escapeHtml(excerpt)}</p>
+            ${
+              copy.hashtags?.length
+                ? `<p class="preview-hashtags">${copy.hashtags.map((t) => escapeHtml(t)).join(" ")}</p>`
+                : ""
+            }
+          </div>
+        `;
+      }
 
-    if (copy?.sections?.length) {
-      html += `
-        <div class="preview-sections">
-          <p class="preview-structure-label">正文结构 · ${copy.sections.length} 节</p>
-          <ul class="preview-structure-list">
-            ${copy.sections
-              .map(
-                (section) =>
-                  `<li><span class="preview-page-role">§</span> ${escapeHtml(section.heading || "未命名小节")}</li>`
-              )
-              .join("")}
-          </ul>
-        </div>
-      `;
-    }
+      if (copy?.sections?.length) {
+        html += `
+          <div class="preview-sections">
+            <p class="preview-structure-label">正文结构 · ${copy.sections.length} 节</p>
+            <ul class="preview-structure-list">
+              ${copy.sections
+                .map(
+                  (section) =>
+                    `<li><span class="preview-page-role">§</span> ${escapeHtml(section.heading || "未命名小节")}</li>`
+                )
+                .join("")}
+            </ul>
+          </div>
+        `;
+      }
 
-    if (plan?.pages?.length) {
-      html += `
-        <div class="preview-structure">
-          <p class="preview-structure-label">页面结构 · ${plan.pages.length} 页</p>
-          <ul class="preview-structure-list">
-            ${plan.pages
-              .map(
-                (page) =>
-                  `<li><span class="preview-page-role">${escapeHtml(page.role)}</span> ${escapeHtml(page.headline)}</li>`
-              )
-              .join("")}
-          </ul>
-        </div>
-      `;
-    }
-
-    if (images.length > 0) {
-      const items = await loadPreviewImages(images);
-      html += `
-        <div class="preview-images">
-          <p class="preview-images-label">卡片 · ${images.length} 张</p>
-          <div class="preview-images-grid">
-            ${items
+      if (plan?.pages?.length) {
+        const pageItems = loadPageAssetPreviewItems(plan.pages, pageAssets);
+        html += `
+          <div class="preview-deck">
+            <p class="preview-structure-label">配图预览 · ${plan.pages.length} 页</p>
+            ${pageItems
               .map(
                 (item) => `
-              <figure class="preview-image-item">
+              <article class="preview-deck-page">
+                <p class="preview-deck-headline">
+                  <span class="preview-page-role">${escapeHtml(item.role)}</span>
+                  ${escapeHtml(item.headline)}
+                </p>
                 ${
-                  item.dataUrl
-                    ? `<img src="${item.dataUrl}" alt="${escapeHtml(item.id)}" />`
-                    : `<p class="preview-image-missing">加载失败</p>`
+                  item.absolutePath
+                    ? `<img class="preview-deck-image" data-absolute-path="${escapeAttr(item.absolutePath)}" alt="${escapeHtml(item.headline)}" />`
+                    : `<p class="preview-deck-placeholder">暂无配图</p>`
                 }
-              </figure>
+                ${item.body ? `<p class="preview-deck-body">${escapeHtml(item.body.slice(0, 80))}${item.body.length > 80 ? "…" : ""}</p>` : ""}
+              </article>
             `
               )
               .join("")}
           </div>
-        </div>
-      `;
+        `;
+      }
+
+      if (images.length > 0) {
+        html += `
+          <div class="preview-images">
+            <p class="preview-images-label">卡片 · ${images.length} 张</p>
+            <div class="preview-images-grid">
+              ${images
+                .map(
+                  (item) => `
+                <figure class="preview-image-item">
+                  ${
+                    item.absolutePath
+                      ? `<img data-absolute-path="${escapeAttr(item.absolutePath)}" alt="${escapeHtml(item.id)}" />`
+                      : `<p class="preview-image-missing">加载失败</p>`
+                  }
+                </figure>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    if (generation !== previewRenderGeneration) {
+      return;
+    }
+    contentEl.innerHTML = html;
+    await hydratePreviewImages(contentEl);
+    if (generation !== previewRenderGeneration) {
+      return;
+    }
+  } catch (error) {
+    if (generation !== previewRenderGeneration) {
+      return;
+    }
+    contentEl.innerHTML = `<p class="preview-empty">预览加载失败：${escapeHtml(error.message)}</p>`;
+  } finally {
+    if (generation === previewRenderGeneration) {
+      requestAnimationFrame(() => contentEl.classList.remove("preview-fade"));
     }
   }
-
-  contentEl.innerHTML = html;
-  requestAnimationFrame(() => contentEl.classList.remove("preview-fade"));
 }
 
 /**
- * @param {Array<{ id: string; absolutePath: string }>} images
+ * @param {Array<{ id: string; role: string; headline: string; body?: string }>} pages
+ * @param {Record<string, { absolutePath?: string }>} pageAssets
  */
-async function loadPreviewImages(images) {
-  return Promise.all(
-    images.map(async (img) => {
+function loadPageAssetPreviewItems(pages, pageAssets) {
+  return pages.map((page) => ({
+    role: page.role,
+    headline: page.headline || "",
+    body: page.body || "",
+    absolutePath: pageAssets[page.id]?.absolutePath || "",
+  }));
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+async function hydratePreviewImages(root) {
+  if (!window.noteGen?.invoke) {
+    return;
+  }
+  const images = root.querySelectorAll("[data-absolute-path]");
+  await Promise.all(
+    Array.from(images).map(async (img) => {
+      const absolutePath = img.getAttribute("data-absolute-path");
+      if (!absolutePath || img.dataset.loaded === "1") {
+        return;
+      }
       try {
-        const dataUrl = await window.noteGen.invoke("images:previewDataUrl", {
-          absolutePath: img.absolutePath,
-        });
-        return { id: img.id, dataUrl };
+        img.src = await window.noteGen.invoke("images:previewDataUrl", { absolutePath });
+        img.dataset.loaded = "1";
       } catch {
-        return { id: img.id, dataUrl: "" };
+        const fallback = document.createElement("p");
+        fallback.className = "preview-image-missing";
+        fallback.textContent = "加载失败";
+        img.replaceWith(fallback);
       }
     })
   );

@@ -5,9 +5,9 @@
 const MANUAL_SECTIONS = [
   {
     id: "intro",
-    title: "欢迎使用 noteGen",
+    title: "欢迎使用 笔记坊",
     body: `
-      <p>noteGen 是一款面向 Windows 的桌面应用，帮助博主利用 AI 快速完成<strong>选题 → 文案 → 配图</strong>全流程，并导出可直接发布的素材包。</p>
+      <p>笔记坊是一款面向 Windows 的桌面应用，随时随地，AI 助力。帮助博主快速完成<strong>选题 → 文案 → 配图</strong>全流程，并导出可直接发布的素材包。</p>
       <p>目前支持<strong>小红书笔记</strong>与<strong>微信公众号长文</strong>两种创作模式。所有进度会自动保存，可随时切换历史创作继续编辑。</p>
     `,
   },
@@ -40,7 +40,7 @@ const MANUAL_SECTIONS = [
     id: "persona",
     title: "运营人设（可选）",
     body: `
-      <p>若你运营多个账号、需要统一口吻，可在侧边栏顶部配置<strong>运营人设</strong>。人设包含平台、领域、目标读者、口吻与标题钩子力度等。</p>
+      <p>若你运营多个账号、需要统一口吻，可在侧边栏顶部配置<strong>运营人设</strong>。人设包含平台、领域、目标读者、口吻与默认标题风格等。设好人设后，选题区的关键词与目标读者会自动带入（若尚未填写）。</p>
       <ul>
         <li>单账号用户可跳过，直接在创作区自由创作</li>
         <li>选中人设后，新建创作时可选择「在此人设下新建」</li>
@@ -68,7 +68,7 @@ const MANUAL_SECTIONS = [
       <ul>
         <li>填写<strong>领域 / 关键词</strong>，例如「周末咖啡店探店」</li>
         <li>可选填<strong>目标读者</strong>，帮助 AI 调整角度</li>
-        <li>选择<strong>标题钩子力度</strong>（克制 / 抓人 / 高张力）</li>
+        <li>选择<strong>标题风格</strong>（克制可信 / 抓人有对比 / 高张力）</li>
         <li>点击「生成选题」，从列表中选定一个方向后继续</li>
       </ul>
     `,
@@ -99,13 +99,14 @@ const MANUAL_SECTIONS = [
   },
   {
     id: "preview",
-    title: "预览与导出",
+    title: "预览、对话与导出",
     body: `
-      <p>右侧面板实时展示笔记效果。文案与配图就绪后：</p>
+      <p>右侧面板可在<strong>预览</strong>与<strong>对话</strong>之间切换（视图菜单可快速跳转）。预览区实时展示笔记效果；对话区可与 AI 自由交流，记录随创作保存。</p>
       <ul>
         <li><strong>复制文案</strong>：一键复制到剪贴板，便于粘贴到平台编辑器</li>
         <li><strong>导出到文件夹</strong>：生成 note.txt / note.md、HTML、图片与元数据，便于本地归档或二次编辑</li>
       </ul>
+      <p><strong>AI 对话</strong>：可与模型自由交流，系统会附带当前创作与人设摘要作为上下文。</p>
     `,
   },
   {

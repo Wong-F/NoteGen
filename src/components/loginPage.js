@@ -16,8 +16,8 @@ export function mountLoginPage(root, { onSuccess }) {
       <div class="login-page-overlay" aria-hidden="true"></div>
       <div class="login-card">
         <div class="login-brand">
-          <h1 class="login-logo">noteGen</h1>
-          <p class="login-tagline">AI 辅助小红书笔记创作</p>
+          <h1 class="login-logo">笔记坊</h1>
+          <p class="login-tagline">随时随地，AI 助力</p>
         </div>
         <form class="login-form" id="login-form" novalidate>
           <label class="login-label" for="login-phone">账户（手机号）</label>

@@ -7,7 +7,7 @@ import {
   deriveWorkspaceTitle,
   notify,
 } from "./appState.js";
-import { getActivePersona, applyPersonaDefaultsToWorkspace } from "./personaStore.js";
+import { getActivePersona, applyPersonaDefaultsToWorkspace, syncIdeaInputFromPersona } from "./personaStore.js";
 import { getDefaultIdeaInput } from "../constants/formDefaults.js";
 import { maybeStartFirstWorkspaceTour } from "./onboardingTour.js";
 
@@ -187,7 +187,9 @@ export async function createWorkspace(options = {}) {
   });
   activateWorkspaceState(created);
   if (usePersona) {
-    applyPersonaDefaultsToWorkspace();
+    applyPersonaDefaultsToWorkspace({ force: true });
+  } else if (appState.activePersonaId) {
+    syncIdeaInputFromPersona(getActivePersona());
   } else {
     appState.ideaInput = getDefaultIdeaInput(appState.workflowType);
   }
@@ -308,6 +310,13 @@ export async function rebindActiveWorkspacePersona(personaId) {
   appState.personaId = rebound.personaId;
   if (rebound.workflowType) {
     appState.workflowType = rebound.workflowType;
+  }
+  if (personaId) {
+    const persona =
+      getActivePersona()?.id === personaId
+        ? getActivePersona()
+        : await window.noteGen.invoke("personas:get", { id: personaId });
+    syncIdeaInputFromPersona(persona);
   }
   await refreshWorkspaceList();
   notify();

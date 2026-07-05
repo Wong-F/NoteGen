@@ -48,6 +48,27 @@ const SECTIONS = [
 
 ];
 
+/**
+ * @param {string} phone
+ * @returns {string}
+ */
+function formatSidebarUserName(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length >= 7) {
+    return `${digits.slice(0, 3)}****${digits.slice(-4)}`;
+  }
+  return phone || "用户";
+}
+
+/**
+ * @param {string} phone
+ * @returns {string}
+ */
+function getAvatarInitial(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  return digits.slice(-1) || "U";
+}
+
 
 
 /** @type {string} */
@@ -68,7 +89,7 @@ let filteredWorkspaces = [];
 
  * @param {HTMLElement} root
 
- * @param {{ openPersonaPanel?: () => void }} [options]
+ * @param {{ openPersonaPanel?: () => void; openSettings?: () => void }} [options]
 
  */
 
@@ -76,7 +97,9 @@ export function mountSidebar(root, options = {}) {
 
   root.innerHTML = `
 
-    <nav class="sidebar-nav" aria-label="创作导航">
+    <div class="sidebar-shell">
+
+      <nav class="sidebar-nav" aria-label="创作导航">
 
       <section class="sidebar-section sidebar-persona-section">
 
@@ -150,7 +173,25 @@ export function mountSidebar(root, options = {}) {
 
       </section>
 
-    </nav>
+      </nav>
+
+      <footer class="sidebar-user-bar">
+        <div class="sidebar-user-info">
+          <span class="sidebar-user-avatar" id="sidebar-user-avatar" aria-hidden="true">—</span>
+          <div class="sidebar-user-text">
+            <span class="sidebar-user-name" id="sidebar-user-name">加载中…</span>
+            <span class="sidebar-user-plan" id="sidebar-user-plan"></span>
+          </div>
+        </div>
+        <button type="button" id="settings-toggle" class="sidebar-settings-btn" aria-label="设置" title="设置">
+          <svg class="sidebar-settings-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.75"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </footer>
+
+    </div>
 
   `;
 
@@ -321,6 +362,45 @@ export function mountSidebar(root, options = {}) {
 
   document.addEventListener("persona:activated", render);
   document.addEventListener("persona:empty", render);
+
+  const settingsBtn = root.querySelector("#settings-toggle");
+  const userNameEl = root.querySelector("#sidebar-user-name");
+  const userPlanEl = root.querySelector("#sidebar-user-plan");
+  const userAvatarEl = root.querySelector("#sidebar-user-avatar");
+
+  settingsBtn?.addEventListener("click", () => {
+    options.openSettings?.();
+  });
+
+  async function loadUserBar() {
+    if (!window.noteGen?.invoke) {
+      userNameEl.textContent = "访客";
+      userPlanEl.textContent = "开发模式";
+      userAvatarEl.textContent = "访";
+      return;
+    }
+
+    try {
+      const authResult = await window.noteGen.invoke("auth:session");
+      const profile = authResult?.profile;
+      if (!profile) {
+        userNameEl.textContent = "未登录";
+        userPlanEl.textContent = "";
+        userAvatarEl.textContent = "?";
+        return;
+      }
+
+      userNameEl.textContent = formatSidebarUserName(profile.phone);
+      userPlanEl.textContent = profile.devBypass ? "开发模式" : profile.subscriptionLabel;
+      userAvatarEl.textContent = getAvatarInitial(profile.phone);
+    } catch {
+      userNameEl.textContent = "—";
+      userPlanEl.textContent = "";
+      userAvatarEl.textContent = "?";
+    }
+  }
+
+  loadUserBar();
 }
 
 

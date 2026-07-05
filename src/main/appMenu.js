@@ -35,6 +35,19 @@ function buildAppMenu(mainWindow) {
         { role: "zoomIn", label: "放大" },
         { role: "zoomOut", label: "缩小" },
         { type: "separator" },
+        {
+          label: "显示预览",
+          click: () => {
+            mainWindow?.webContents.send("app:showPanelTab", { tab: "preview" });
+          },
+        },
+        {
+          label: "显示对话",
+          click: () => {
+            mainWindow?.webContents.send("app:showPanelTab", { tab: "chat" });
+          },
+        },
+        { type: "separator" },
         { role: "togglefullscreen", label: "切换全屏" },
         ...(isDev
           ? [{ type: "separator" }, { role: "toggleDevTools", label: "开发者工具" }]
@@ -60,13 +73,13 @@ function buildAppMenu(mainWindow) {
         },
         { type: "separator" },
         {
-          label: "关于 noteGen",
+          label: "关于 笔记坊",
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: "info",
-              title: "关于 noteGen",
-              message: "noteGen",
-              detail: `版本 ${app.getVersion()}\n\n面向 Windows 的 AI 辅助笔记创作工具，支持小红书、微信公众号等平台。`,
+              title: "关于 笔记坊",
+              message: "笔记坊",
+              detail: `版本 ${app.getVersion()}\n\n随时随地，AI 助力\n\n帮助博主完成选题、文案、配图与导出，支持小红书、微信公众号等平台。`,
               buttons: ["确定"],
             });
           },

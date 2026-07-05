@@ -34,6 +34,17 @@ function sanitizeLabel(label) {
   return (label || `stock-${Date.now()}`).replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
 }
 
+/**
+ * @param {number} count
+ */
+function clampResultCount(count) {
+  const value = Number(count);
+  if (!Number.isFinite(value)) {
+    return 3;
+  }
+  return Math.min(6, Math.max(1, Math.round(value)));
+}
+
 class StockImageService {
   /**
    * @param {() => { stock?: { pexelsApiKey?: string; unsplashAccessKey?: string } }} getSettings
@@ -57,17 +68,18 @@ class StockImageService {
 
   /**
    * @param {string} keyword
-   * @returns {Promise<{ provider: string; downloadUrl: string; pageUrl: string; author: string; license: string } | null>}
+   * @param {number} [count]
    */
-  async searchPexels(keyword) {
+  async searchPexels(keyword, count = 1) {
     const { pexelsApiKey } = this.resolveStockConfig();
     if (!pexelsApiKey) {
-      return null;
+      return [];
     }
 
+    const perPage = String(clampResultCount(count));
     const url = `https://api.pexels.com/v1/search?${new URLSearchParams({
       query: keyword,
-      per_page: "5",
+      per_page: perPage,
       locale: "zh-CN",
     })}`;
 
@@ -85,38 +97,40 @@ class StockImageService {
     }
 
     const data = await response.json();
-    const photo = data?.photos?.[0];
-    if (!photo) {
-      return null;
-    }
-
-    const downloadUrl = photo.src?.large2x || photo.src?.large || photo.src?.original;
-    if (!downloadUrl) {
-      return null;
-    }
-
-    return {
-      provider: "pexels",
-      downloadUrl,
-      pageUrl: photo.url || `https://www.pexels.com/photo/${photo.id}/`,
-      author: photo.photographer || "Unknown",
-      license: "Pexels License",
-    };
+    const photos = Array.isArray(data?.photos) ? data.photos : [];
+    return photos
+      .map((photo) => {
+        const downloadUrl = photo.src?.large2x || photo.src?.large || photo.src?.original;
+        const previewUrl = photo.src?.medium || photo.src?.small || downloadUrl;
+        if (!downloadUrl) {
+          return null;
+        }
+        return {
+          provider: "pexels",
+          downloadUrl,
+          previewUrl,
+          pageUrl: photo.url || `https://www.pexels.com/photo/${photo.id}/`,
+          author: photo.photographer || "Unknown",
+          license: "Pexels License",
+        };
+      })
+      .filter(Boolean);
   }
 
   /**
    * @param {string} keyword
-   * @returns {Promise<{ provider: string; downloadUrl: string; pageUrl: string; author: string; license: string } | null>}
+   * @param {number} [count]
    */
-  async searchUnsplash(keyword) {
+  async searchUnsplash(keyword, count = 1) {
     const { unsplashAccessKey } = this.resolveStockConfig();
     if (!unsplashAccessKey) {
-      return null;
+      return [];
     }
 
+    const perPage = String(clampResultCount(count));
     const url = `https://api.unsplash.com/search/photos?${new URLSearchParams({
       query: keyword,
-      per_page: "5",
+      per_page: perPage,
     })}`;
 
     const response = await this.fetchImpl(url, {
@@ -133,23 +147,24 @@ class StockImageService {
     }
 
     const data = await response.json();
-    const photo = data?.results?.[0];
-    if (!photo) {
-      return null;
-    }
-
-    const downloadUrl = photo.urls?.regular || photo.urls?.full;
-    if (!downloadUrl) {
-      return null;
-    }
-
-    return {
-      provider: "unsplash",
-      downloadUrl,
-      pageUrl: photo.links?.html || `https://unsplash.com/photos/${photo.id}`,
-      author: photo.user?.name || "Unknown",
-      license: "Unsplash License",
-    };
+    const results = Array.isArray(data?.results) ? data.results : [];
+    return results
+      .map((photo) => {
+        const downloadUrl = photo.urls?.regular || photo.urls?.full;
+        const previewUrl = photo.urls?.small || photo.urls?.thumb || downloadUrl;
+        if (!downloadUrl) {
+          return null;
+        }
+        return {
+          provider: "unsplash",
+          downloadUrl,
+          previewUrl,
+          pageUrl: photo.links?.html || `https://unsplash.com/photos/${photo.id}`,
+          author: photo.user?.name || "Unknown",
+          license: "Unsplash License",
+        };
+      })
+      .filter(Boolean);
   }
 
   /**
@@ -157,6 +172,15 @@ class StockImageService {
    * @param {string} keyword
    */
   async searchCandidate(keyword) {
+    const candidates = await this.searchCandidates(keyword, 1);
+    return candidates[0];
+  }
+
+  /**
+   * @param {string} keyword
+   * @param {number} [count]
+   */
+  async searchCandidates(keyword, count = 3) {
     const query = sanitizeKeyword(keyword);
     if (!query) {
       throw new StockImageError("搜索关键词不能为空", "CONFIG");
@@ -170,17 +194,18 @@ class StockImageService {
       );
     }
 
+    const limit = clampResultCount(count);
     if (config.pexelsApiKey) {
-      const pexelsHit = await this.searchPexels(query);
-      if (pexelsHit) {
-        return { ...pexelsHit, keyword: query };
+      const pexelsHits = await this.searchPexels(query, limit);
+      if (pexelsHits.length) {
+        return pexelsHits.slice(0, limit).map((item) => ({ ...item, keyword: query }));
       }
     }
 
     if (config.unsplashAccessKey) {
-      const unsplashHit = await this.searchUnsplash(query);
-      if (unsplashHit) {
-        return { ...unsplashHit, keyword: query };
+      const unsplashHits = await this.searchUnsplash(query, limit);
+      if (unsplashHits.length) {
+        return unsplashHits.slice(0, limit).map((item) => ({ ...item, keyword: query }));
       }
     }
 
@@ -334,10 +359,10 @@ class StockImageService {
   }
 
   /**
-   * @param {{ keyword: string; sessionId?: string; label?: string }} payload
+   * @param {{ provider: string; downloadUrl: string; pageUrl: string; author: string; license: string; keyword: string }} candidate
+   * @param {{ sessionId?: string; label?: string }} payload
    */
-  async searchAndDownload(payload) {
-    const candidate = await this.searchCandidate(payload.keyword);
+  async downloadCandidate(candidate, payload = {}) {
     const sessionId = resolveSessionId(payload.sessionId);
     const assetsDir = getAssetsDir(this.userDataDir, sessionId);
     ensureDir(assetsDir);
@@ -369,6 +394,14 @@ class StockImageService {
       keyword: candidate.keyword,
     };
   }
+
+  /**
+   * @param {{ keyword: string; sessionId?: string; label?: string }} payload
+   */
+  async searchAndDownload(payload) {
+    const candidate = await this.searchCandidate(payload.keyword);
+    return this.downloadCandidate(candidate, payload);
+  }
 }
 
-module.exports = { StockImageService, StockImageError };
+module.exports = { StockImageService, StockImageError, clampResultCount };

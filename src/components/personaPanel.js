@@ -11,18 +11,14 @@ import {
 } from "./personaStore.js";
 import { createWorkspace } from "./workspaceStore.js";
 import { appState } from "./appState.js";
-import { getPersonaTemplate } from "../constants/formDefaults.js";
+import { getPersonaTemplate, TITLE_STYLE_OPTIONS } from "../constants/formDefaults.js";
 
 const PLATFORM_OPTIONS = [
   { id: "xiaohongshu", label: "小红书" },
   { id: "wechat", label: "微信公众号" },
 ];
 
-const HOOK_OPTIONS = [
-  { level: 1, label: "克制可信" },
-  { level: 2, label: "抓人有对比" },
-  { level: 3, label: "高张力" },
-];
+const HOOK_OPTIONS = TITLE_STYLE_OPTIONS;
 
 /**
  * Mount persona management drawer.
@@ -31,7 +27,7 @@ const HOOK_OPTIONS = [
  */
 export function mountPersonaPanel(root) {
   const overlay = document.createElement("div");
-  overlay.className = "persona-overlay settings-overlay";
+  overlay.className = "persona-overlay settings-overlay settings-overlay--left";
   overlay.hidden = true;
   overlay.innerHTML = `
     <div class="settings-drawer persona-drawer" role="dialog" aria-label="运营人设">
@@ -65,7 +61,7 @@ export function mountPersonaPanel(root) {
           <textarea id="persona-form-voice" rows="2" placeholder="如：干脆、有方法论，像资深同事分享"></textarea>
           <label for="persona-form-taboos">禁忌（逗号分隔，可选）</label>
           <input id="persona-form-taboos" type="text" placeholder="震惊体, 虚构数据" />
-          <label for="persona-form-hook">默认标题钩子力度</label>
+          <label for="persona-form-hook">默认标题风格</label>
           <select id="persona-form-hook"></select>
           <div class="persona-form-actions">
             <button type="button" id="persona-form-back" class="btn-secondary">返回</button>

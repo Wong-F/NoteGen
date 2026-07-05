@@ -217,6 +217,7 @@ type: user | feedback | project | reference
 4. **Refactor**：在测试通过前提下清理结构
 5. **Review**：非 trivial 改动提交前须经 Codex 代码审查（见下方「代码审查」节）
 6. **Commit**：提交信息说明 why，并引用规划文档
+7. **Verify**：自行运行验证（见下方「质量门禁」），通过后再向用户反馈完成
 
 ## 技术标准与决策
 
@@ -248,6 +249,11 @@ type: user | feedback | project | reference
 - 相关测试通过
 - 格式化与 lint 通过（ESLint / Prettier）
 - **Codex 代码审查通过**（适用于非 trivial 改动）
+- **Agent 交付自测**（所有 Agent 必须遵守）：
+  - 向用户反馈「已完成」之前，须**自行运行验证**，不得在未验证的情况下宣称完成
+  - 最低要求：改动涉及的业务逻辑跑 `npm test` 且全绿
+  - 若改动涉及 Electron 主进程、IPC 路由、服务注册或应用启动路径，还须运行 `npm run dev`（或等价启动命令），确认进程能正常拉起、无启动期报错后再反馈
+  - 若验证失败，先修复再继续反馈；同一问题修复后须重新跑一遍验证
 
 ## 错误处理
 

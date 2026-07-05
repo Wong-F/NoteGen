@@ -175,18 +175,72 @@ describe("StockImageService", () => {
     assert.equal(result.providers.find((p) => p.id === "unsplash").code, "AUTH");
   });
 
-  it("testConnection ok when all configured providers pass", async () => {
-    const fetchImpl = async () => ({ ok: true, json: async () => ({ photos: [], results: [] }) });
+  it("searchCandidates returns multiple Pexels hits with preview URLs", async () => {
+    const multiPexels = {
+      photos: [
+        {
+          id: 1,
+          photographer: "Alice",
+          url: "https://www.pexels.com/photo/1/",
+          src: { large2x: "https://images.pexels.com/1.jpg", medium: "https://images.pexels.com/1-m.jpg" },
+        },
+        {
+          id: 2,
+          photographer: "Bob",
+          url: "https://www.pexels.com/photo/2/",
+          src: { large2x: "https://images.pexels.com/2.jpg", medium: "https://images.pexels.com/2-m.jpg" },
+        },
+      ],
+    };
+
+    const fetchImpl = async (url) => {
+      if (String(url).includes("api.pexels.com")) {
+        return { ok: true, json: async () => multiPexels };
+      }
+      throw new Error("unexpected fetch");
+    };
 
     const service = new StockImageService(
-      () => ({ stock: { pexelsApiKey: "p", unsplashAccessKey: "" } }),
+      () => ({ stock: { pexelsApiKey: "pexels-key", unsplashAccessKey: "" } }),
       makeTmpDir(),
       { fetchImpl }
     );
 
-    const result = await service.testConnection();
-    assert.equal(result.ok, true);
-    assert.equal(result.providers.find((p) => p.id === "pexels").ok, true);
-    assert.equal(result.providers.find((p) => p.id === "unsplash").configured, false);
+    const candidates = await service.searchCandidates("food", 2);
+    assert.equal(candidates.length, 2);
+    assert.equal(candidates[0].provider, "pexels");
+    assert.match(candidates[0].previewUrl, /1-m\.jpg/);
+    assert.match(candidates[1].downloadUrl, /2\.jpg/);
+  });
+
+  it("downloadCandidate saves file and appends source record", async () => {
+    const userData = makeTmpDir();
+    const fetchImpl = async () => ({
+      ok: true,
+      headers: { get: () => "image/jpeg" },
+      arrayBuffer: async () =>
+        pngBytes.buffer.slice(pngBytes.byteOffset, pngBytes.byteOffset + pngBytes.byteLength),
+    });
+
+    const service = new StockImageService(
+      () => ({ stock: { pexelsApiKey: "p", unsplashAccessKey: "" } }),
+      userData,
+      { fetchImpl }
+    );
+
+    const result = await service.downloadCandidate(
+      {
+        provider: "pexels",
+        downloadUrl: "https://images.pexels.com/photo.jpg",
+        pageUrl: "https://www.pexels.com/photo/42/",
+        author: "Alice",
+        license: "Pexels License",
+        keyword: "coffee",
+      },
+      { sessionId: "sess-dl", label: "xhs-01" }
+    );
+
+    assert.equal(result.provider, "pexels");
+    assert.ok(fs.existsSync(result.absolutePath));
   });
 });

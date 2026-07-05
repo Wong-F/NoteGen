@@ -4,8 +4,103 @@
  */
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+
+/** Skip common virtual / tunnel adapters on Windows and elsewhere. */
+const VIRTUAL_INTERFACE_RE =
+  /virtual|vmware|virtualbox|vethernet|hyper-v|wsl|tap|tun|vpn|loopback|npcap|bluetooth|tailscale|zerotier|wireguard|ppp|docker|bridge/i;
+const ETHERNET_INTERFACE_RE = /ethernet|以太网|^eth/i;
+const WIFI_INTERFACE_RE = /wi-?fi|wlan|wireless|无线/i;
+
+/**
+ * @param {string} mac
+ * @returns {string}
+ */
+function formatMacAddress(mac) {
+  return String(mac || "")
+    .replace(/[^0-9a-f]/gi, "")
+    .toUpperCase();
+}
+
+/**
+ * @param {string} mac
+ * @returns {boolean}
+ */
+function isUsableMac(mac) {
+  const normalized = formatMacAddress(mac);
+  if (normalized.length !== 12) {
+    return false;
+  }
+  if (normalized === "000000000000" || normalized === "FFFFFFFFFFFF") {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isVirtualInterfaceName(name) {
+  return VIRTUAL_INTERFACE_RE.test(String(name || ""));
+}
+
+/**
+ * Lower score = higher priority. Ethernet first, then Wi-Fi, then others.
+ * @param {string} name
+ * @returns {number}
+ */
+function interfacePriority(name) {
+  if (ETHERNET_INTERFACE_RE.test(name)) {
+    return 0;
+  }
+  if (WIFI_INTERFACE_RE.test(name)) {
+    return 1;
+  }
+  return 2;
+}
+
+/**
+ * Pick the MAC of the best physical adapter (AABBCCDDEEFF).
+ * @param {NodeJS.Dict<import("node:os").NetworkInterfaceInfo[]>} [networkInterfaces]
+ * @returns {string | null}
+ */
+function resolvePhysicalMacAddress(networkInterfaces = os.networkInterfaces()) {
+  /** @type {{ name: string; mac: string; priority: number }[]} */
+  const candidates = [];
+
+  for (const [name, addrs] of Object.entries(networkInterfaces || {})) {
+    if (isVirtualInterfaceName(name)) {
+      continue;
+    }
+
+    for (const addr of addrs || []) {
+      if (addr.internal) {
+        continue;
+      }
+
+      const mac = formatMacAddress(addr.mac);
+      if (!isUsableMac(mac)) {
+        continue;
+      }
+
+      candidates.push({ name, mac, priority: interfacePriority(name) });
+    }
+  }
+
+  const bestByMac = new Map();
+  for (const candidate of candidates) {
+    const existing = bestByMac.get(candidate.mac);
+    if (!existing || candidate.priority < existing.priority) {
+      bestByMac.set(candidate.mac, candidate);
+    }
+  }
+
+  const sorted = [...bestByMac.values()].sort((a, b) => a.priority - b.priority);
+  return sorted[0]?.mac || null;
+}
 
 const API_BASE = "http://sit.xslq.work/sit/interface/api";
 const ACTIVATE_PATH = "/publickey/normaltoken";
@@ -38,17 +133,18 @@ const ERROR_MSG_MAP = {
 class AuthService {
   /**
    * @param {string} userDataDir
-   * @param {{ isDev?: boolean; fetchFn?: typeof fetch }} [options]
+   * @param {{ isDev?: boolean; fetchFn?: typeof fetch; networkInterfacesFn?: typeof os.networkInterfaces }} [options]
    */
   constructor(userDataDir, options = {}) {
     this.userDataDir = userDataDir;
     this.isDev = Boolean(options.isDev);
     this.fetchFn = options.fetchFn || fetch;
+    this.networkInterfacesFn = options.networkInterfacesFn || os.networkInterfaces;
     this.sessionPath = path.join(userDataDir, "auth-session.json");
     this.deviceIdPath = path.join(userDataDir, "device-id.json");
   }
 
-  /** @returns {string} */
+  /** @returns {string} Device id sent as API `imei` (physical MAC, AABBCCDDEEFF). */
   getDeviceId() {
     try {
       const stored = JSON.parse(fs.readFileSync(this.deviceIdPath, "utf8"));
@@ -61,7 +157,12 @@ class AuthService {
       }
     }
 
-    const id = randomUUID();
+    const mac = resolvePhysicalMacAddress(this.networkInterfacesFn());
+    const id = mac || randomUUID();
+    if (!mac) {
+      console.warn("[noteGen] no physical MAC found, falling back to UUID device id");
+    }
+
     fs.mkdirSync(this.userDataDir, { recursive: true });
     fs.writeFileSync(this.deviceIdPath, JSON.stringify({ id }, null, 2), "utf8");
     return id;
@@ -268,4 +369,6 @@ module.exports = {
   SCRIPT_TYPE,
   DEV_BYPASS_PHONE,
   ERROR_MSG_MAP,
+  formatMacAddress,
+  resolvePhysicalMacAddress,
 };

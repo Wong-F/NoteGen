@@ -88,4 +88,43 @@ describe("ImageService", () => {
     assert.ok(fs.existsSync(result.absolutePath));
     assert.equal(fs.readFileSync(result.absolutePath).subarray(0, 4).toString("hex"), "89504e47");
   });
+
+  it("generateImages saves multiple b64 responses when count > 1", async () => {
+    const userData = makeTmpDir();
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+    const b64 = pngBytes.toString("base64");
+
+    const service = new ImageService(
+      () => ({
+        ai: {},
+        image: { baseUrl: "https://api.example.com/v1", apiKey: "sk-test", model: "dall-e-3" },
+      }),
+      userData,
+      {
+        fetchImpl: async (_url, options) => {
+          const body = JSON.parse(options.body);
+          assert.equal(body.n, 3);
+          return {
+            ok: true,
+            json: async () => ({
+              data: [{ b64_json: b64 }, { b64_json: b64 }, { b64_json: b64 }],
+            }),
+          };
+        },
+      }
+    );
+
+    const result = await service.generateImages({
+      prompt: "food collage",
+      sessionId: "sess-batch",
+      label: "page-cover",
+      count: 3,
+    });
+
+    assert.equal(result.sessionId, "sess-batch");
+    assert.equal(result.images.length, 3);
+    for (const image of result.images) {
+      assert.ok(fs.existsSync(image.absolutePath));
+    }
+  });
 });

@@ -5,6 +5,8 @@ const {
   getDefaultIdeaInput,
   fillIdeaInputDefaults,
   mergePersonaSeed,
+  buildKeywordsFromPersona,
+  isIdeaInputAtDefaults,
 } = require("../src/constants/formDefaults.cjs");
 const { createBlankPersonaState } = require("../src/services/personaStoreService");
 const { createBlankWorkspaceState } = require("../src/services/workspaceStoreService");
@@ -39,6 +41,23 @@ describe("formDefaults", () => {
     assert.equal(merged.name, "我的号");
     assert.ok(merged.taboos.length > 0);
     assert.ok(merged.secondaryDomains.length > 0);
+  });
+
+  it("buildKeywordsFromPersona merges primary and secondary domains", () => {
+    const keywords = buildKeywordsFromPersona({
+      primaryDomain: "职场效率",
+      secondaryDomains: ["AI工具", "时间管理"],
+    });
+    assert.equal(keywords, "职场效率, AI工具, 时间管理");
+  });
+
+  it("isIdeaInputAtDefaults detects template values", () => {
+    const defaults = getDefaultIdeaInput("xiaohongshu-note");
+    assert.equal(isIdeaInputAtDefaults(defaults, "xiaohongshu-note"), true);
+    assert.equal(
+      isIdeaInputAtDefaults({ ...defaults, keywords: "自定义" }, "xiaohongshu-note"),
+      false
+    );
   });
 });
 

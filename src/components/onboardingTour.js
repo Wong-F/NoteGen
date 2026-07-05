@@ -247,7 +247,7 @@ function getWelcomeSteps() {
       selector: "#settings-toggle",
       title: "设置",
       body: "在这里配置 AI 文案与图像 API Key，连接本地 Ollama 或云端模型。",
-      placement: "bottom",
+      placement: "top",
     },
   ];
 }

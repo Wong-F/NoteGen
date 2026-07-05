@@ -8,6 +8,7 @@ import {
 } from "./appState.js";
 import { saveWorkspaceNow } from "./workspaceStore.js";
 import { escapeHtml, escapeAttr } from "./utils.js";
+import { TITLE_STYLE_OPTIONS, formatTitleStyleLabel } from "../constants/formDefaults.js";
 
 /** @returns {{ personaId?: string; workflowType: string }} */
 function workspacePipelinePayload() {
@@ -184,14 +185,31 @@ function bindSectionsEditorEvents(root) {
  * @param {HTMLElement} root
  */
 export function mountWorkspace(root) {
+  root.className = "workspace-root";
   root.innerHTML = `
-    <div class="workspace-inner" id="workspace-inner"></div>
+    <div class="workspace-chrome" id="workspace-chrome" hidden>
+      <h1 class="workspace-chrome-title" id="workspace-chrome-title"></h1>
+    </div>
+    <div class="workspace-scroll" id="workspace-scroll">
+      <div class="workspace-inner" id="workspace-inner"></div>
+    </div>
   `;
 
+  const chromeEl = root.querySelector("#workspace-chrome");
+  const titleEl = root.querySelector("#workspace-chrome-title");
   const inner = root.querySelector("#workspace-inner");
+
+  function updateChrome() {
+    const show = appState.workspaceReady;
+    chromeEl.hidden = !show;
+    if (show) {
+      titleEl.textContent = appState.workspaceTitle || "未命名创作";
+    }
+  }
 
   let lastSection = appState.activeSection;
   subscribe(() => {
+    updateChrome();
     if (appState.activeSection !== lastSection) {
       lastSection = appState.activeSection;
       renderSection(inner);
@@ -200,9 +218,19 @@ export function mountWorkspace(root) {
 
   document.addEventListener("workspace:activated", () => {
     lastSection = appState.activeSection;
+    updateChrome();
     renderSection(inner);
   });
 
+  document.addEventListener("workspace:empty", updateChrome);
+
+  document.addEventListener("persona:idea-synced", () => {
+    if (appState.activeSection === "idea" && appState.workspaceReady) {
+      renderSection(inner);
+    }
+  });
+
+  updateChrome();
   renderSection(inner);
 }
 
@@ -248,10 +276,11 @@ function getIdeaHtml() {
         placeholder="目标读者（可选），例如：25-35 岁上班族"
         value="${escapeAttr(input.targetReader)}" />
       <div class="field-row">
-        <select id="hook-level-select" class="field-select">
-          <option value="1" ${input.hookLevel === 1 ? "selected" : ""}>钩子等级 1 · 克制可信</option>
-          <option value="2" ${input.hookLevel === 2 ? "selected" : ""}>钩子等级 2 · 抓人有对比</option>
-          <option value="3" ${input.hookLevel === 3 ? "selected" : ""}>钩子等级 3 · 高张力</option>
+        <select id="hook-level-select" class="field-select" aria-label="标题风格">
+          ${TITLE_STYLE_OPTIONS.map(
+            (item) =>
+              `<option value="${item.level}" ${input.hookLevel === item.level ? "selected" : ""}>${escapeHtml(formatTitleStyleLabel(item.level))}</option>`
+          ).join("")}
         </select>
         <button id="topics-suggest-btn" type="button" class="btn-primary">生成选题</button>
       </div>
@@ -812,6 +841,223 @@ function getCopyFromEditor() {
 
 /**
  * @param {HTMLElement} planList
+ * @param {string} pageId
+ * @returns {number}
+ */
+function getPageResultCount(planList, pageId) {
+  const select = planList.querySelector(`.page-result-count[data-page-id="${CSS.escape(pageId)}"]`);
+  const value = Number(select?.value);
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(6, Math.max(1, value));
+}
+
+/**
+ * @param {{ absolutePath?: string }} asset
+ * @returns {string}
+ */
+function renderBoundAssetPreview(asset) {
+  if (!asset?.absolutePath) {
+    return "";
+  }
+  return `
+    <div class="page-plan-preview" data-path="${escapeAttr(asset.absolutePath)}">
+      <img class="page-plan-thumb" alt="已绑定图片预览" />
+    </div>
+  `;
+}
+
+/**
+ * @param {string} pageId
+ * @param {Array<{ kind: string; previewUrl?: string; absolutePath?: string }>} candidates
+ * @returns {string}
+ */
+function renderCandidatePickerHtml(pageId, candidates) {
+  if (!candidates?.length) {
+    return "";
+  }
+  return `
+    <div class="page-candidate-picker" data-page-id="${escapeAttr(pageId)}">
+      <p class="page-candidate-label">选择一张绑定到此页</p>
+      <div class="page-candidate-grid">
+        ${candidates
+          .map((item, index) => {
+            if (item.kind === "stock" && item.previewUrl) {
+              return `
+                <button type="button" class="page-candidate-btn page-candidate-btn--stock"
+                  data-page-id="${escapeAttr(pageId)}"
+                  data-candidate-index="${index}"
+                  data-preview-url="${escapeAttr(item.previewUrl)}">
+                  <img alt="" class="page-candidate-thumb" />
+                </button>
+              `;
+            }
+            return `
+              <button type="button" class="page-candidate-btn page-candidate-btn--local"
+                data-page-id="${escapeAttr(pageId)}"
+                data-candidate-index="${index}"
+                data-path="${escapeAttr(item.absolutePath || "")}">
+                <img alt="" class="page-candidate-thumb" />
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * @param {HTMLElement} planList
+ */
+async function loadPagePlanThumbnails(planList) {
+  const previews = planList.querySelectorAll(".page-plan-preview[data-path]");
+  await Promise.all(
+    Array.from(previews).map(async (preview) => {
+      const img = preview.querySelector(".page-plan-thumb");
+      const absolutePath = preview.getAttribute("data-path");
+      if (!img || !absolutePath || img.dataset.loaded === "1") {
+        return;
+      }
+      try {
+        const dataUrl = await window.noteGen.invoke("images:previewDataUrl", { absolutePath });
+        img.src = dataUrl;
+        img.dataset.loaded = "1";
+      } catch {
+        img.alt = "预览加载失败";
+      }
+    })
+  );
+
+  const localCandidates = planList.querySelectorAll(".page-candidate-btn--local[data-path]");
+  await Promise.all(
+    Array.from(localCandidates).map(async (btn) => {
+      const img = btn.querySelector(".page-candidate-thumb");
+      const absolutePath = btn.getAttribute("data-path");
+      if (!img || !absolutePath || img.dataset.loaded === "1") {
+        return;
+      }
+      try {
+        const dataUrl = await window.noteGen.invoke("images:previewDataUrl", { absolutePath });
+        img.src = dataUrl;
+        img.dataset.loaded = "1";
+      } catch {
+        img.alt = "预览加载失败";
+      }
+    })
+  );
+
+  const stockCandidates = planList.querySelectorAll(".page-candidate-btn--stock[data-preview-url]");
+  await Promise.all(
+    Array.from(stockCandidates).map(async (btn) => {
+      const img = btn.querySelector(".page-candidate-thumb");
+      const previewUrl = btn.getAttribute("data-preview-url");
+      if (!img || !previewUrl || img.dataset.loaded === "1") {
+        return;
+      }
+      try {
+        const dataUrl = await window.noteGen.invoke("images:fetchRemoteDataUrl", { url: previewUrl });
+        img.src = dataUrl;
+        img.dataset.loaded = "1";
+      } catch {
+        img.alt = "预览加载失败";
+      }
+    })
+  );
+}
+
+/**
+ * @param {string} pageId
+ * @param {{ absolutePath: string; relativePath: string; source: string }} asset
+ * @param {HTMLElement} planList
+ * @param {HTMLElement} statusEl
+ * @param {string} message
+ */
+function bindPageAsset(pageId, asset, planList, statusEl, message) {
+  appState.pageAssets[pageId] = asset;
+  delete appState.pageImageCandidates[pageId];
+  appState.renderedImages = [];
+  statusEl.textContent = message;
+  const renderBtn = document.querySelector("#card-render-btn");
+  if (appState.pagePlan && planList && renderBtn) {
+    renderPagePlan(planList, renderBtn, statusEl);
+  }
+  notify();
+}
+
+/**
+ * @param {string} pageId
+ * @param {Array<object>} candidates
+ * @param {HTMLElement} planList
+ * @param {HTMLElement} statusEl
+ * @param {string} message
+ */
+function showImageCandidates(pageId, candidates, planList, statusEl, message) {
+  appState.pageImageCandidates[pageId] = candidates;
+  appState.renderedImages = [];
+  statusEl.textContent = message;
+  const renderBtn = document.querySelector("#card-render-btn");
+  if (appState.pagePlan && planList && renderBtn) {
+    renderPagePlan(planList, renderBtn, statusEl);
+  }
+}
+
+/**
+ * @param {string} pageId
+ * @param {number} index
+ * @param {HTMLElement} planList
+ * @param {HTMLElement} statusEl
+ */
+async function handleSelectCandidate(pageId, index, planList, statusEl) {
+  const candidates = appState.pageImageCandidates[pageId];
+  const item = candidates?.[index];
+  if (!item) {
+    return;
+  }
+
+  statusEl.textContent = "正在绑定所选图片…";
+  try {
+    if (item.kind === "stock") {
+      const sessionId = ensureSessionId();
+      const downloaded = await window.noteGen.invoke("images:downloadStockCandidate", {
+        candidate: item.candidate,
+        sessionId,
+        label: pageId,
+      });
+      appState.sessionId = downloaded.sessionId;
+      bindPageAsset(
+        pageId,
+        {
+          absolutePath: downloaded.absolutePath,
+          relativePath: downloaded.relativePath,
+          source: `stock:${downloaded.provider || item.source || "stock"}`,
+        },
+        planList,
+        statusEl,
+        `已绑定图库图片（${downloaded.provider || item.source || "stock"}）`
+      );
+      return;
+    }
+
+    bindPageAsset(
+      pageId,
+      {
+        absolutePath: item.absolutePath,
+        relativePath: item.relativePath,
+        source: item.source || "ai",
+      },
+      planList,
+      statusEl,
+      "已绑定所选图片"
+    );
+  } catch (error) {
+    statusEl.textContent = `绑定失败：${error.message}`;
+  }
+}
+
+/**
+ * @param {HTMLElement} planList
  * @param {HTMLButtonElement} renderBtn
  * @param {HTMLElement} statusEl
  */
@@ -827,6 +1073,7 @@ function renderPagePlan(planList, renderBtn, statusEl) {
       const asset = appState.pageAssets[page.id];
       const assetLabel = asset ? `已绑定：${asset.source}` : "未绑定（纯文字）";
       const canDelete = plan.pages.length > 1;
+      const candidates = appState.pageImageCandidates[page.id];
       return `
         <article class="page-plan-item" data-page-id="${escapeAttr(page.id)}">
           <div class="page-plan-header">
@@ -841,7 +1088,9 @@ function renderPagePlan(planList, renderBtn, statusEl) {
               ${canDelete ? "" : "disabled"}>删除</button>
           </div>
           <p class="page-plan-meta">${escapeHtml(page.role)} · ${assetLabel}</p>
+          ${renderBoundAssetPreview(asset)}
           ${page.body ? `<p class="page-plan-body">${escapeHtml(page.body)}</p>` : ""}
+          ${renderCandidatePickerHtml(page.id, candidates)}
           <div class="page-plan-fields">
             <input type="text" class="page-ai-prompt-input field-borderless field-secondary"
               data-page-id="${escapeAttr(page.id)}"
@@ -853,6 +1102,16 @@ function renderPagePlan(planList, renderBtn, statusEl) {
               placeholder="图库搜索词" />
           </div>
           <div class="page-plan-actions">
+            <label class="page-result-count-wrap">
+              <span>返回</span>
+              <select class="page-result-count field-borderless field-secondary"
+                data-page-id="${escapeAttr(page.id)}" aria-label="返回图片数量">
+                ${[1, 2, 3, 4, 5, 6]
+                  .map((n) => `<option value="${n}">${n}</option>`)
+                  .join("")}
+              </select>
+              <span>张</span>
+            </label>
             <button type="button" class="btn-secondary page-pick-btn" data-page-id="${escapeAttr(page.id)}">用户供图</button>
             <button type="button" class="btn-secondary page-ai-btn" data-page-id="${escapeAttr(page.id)}">AI 生图</button>
             <button type="button" class="btn-secondary page-stock-btn" data-page-id="${escapeAttr(page.id)}">图库搜图</button>
@@ -895,6 +1154,18 @@ function renderPagePlan(planList, renderBtn, statusEl) {
   if (addBtn) {
     addBtn.addEventListener("click", () => handleAddPage(planList, renderBtn, statusEl));
   }
+
+  planList.querySelectorAll(".page-candidate-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pageId = btn.getAttribute("data-page-id");
+      const index = Number(btn.getAttribute("data-candidate-index"));
+      if (pageId && Number.isFinite(index)) {
+        handleSelectCandidate(pageId, index, planList, statusEl);
+      }
+    });
+  });
+
+  void loadPagePlanThumbnails(planList);
 }
 
 /** @param {HTMLElement} planList */
@@ -949,6 +1220,7 @@ function handleDeletePage(pageId, planList, renderBtn, statusEl) {
   syncPagePlanInputs(planList);
   appState.pagePlan.pages = appState.pagePlan.pages.filter((page) => page.id !== pageId);
   delete appState.pageAssets[pageId];
+  delete appState.pageImageCandidates[pageId];
   appState.renderedImages = [];
   renderPagePlan(planList, renderBtn, statusEl);
   statusEl.textContent = "已删除页面";
@@ -1006,6 +1278,7 @@ function handleClearImage(pageId, planList, statusEl) {
     return;
   }
   delete appState.pageAssets[pageId];
+  delete appState.pageImageCandidates[pageId];
   statusEl.textContent = `已清除配图`;
   const renderBtn = document.querySelector("#card-render-btn");
   if (appState.pagePlan && planList && renderBtn) {
@@ -1033,17 +1306,17 @@ async function handleUserImage(pageId, planList, statusEl) {
       label: pageId,
     });
     appState.sessionId = imported.sessionId;
-    appState.pageAssets[pageId] = {
-      absolutePath: imported.absolutePath,
-      relativePath: imported.relativePath,
-      source: "user",
-    };
-    statusEl.textContent = `已导入图片：${imported.filename}`;
-    const renderBtn = document.querySelector("#card-render-btn");
-    if (appState.pagePlan) {
-      renderPagePlan(planList, renderBtn, statusEl);
-    }
-    notify();
+    bindPageAsset(
+      pageId,
+      {
+        absolutePath: imported.absolutePath,
+        relativePath: imported.relativePath,
+        source: "user",
+      },
+      planList,
+      statusEl,
+      `已导入图片：${imported.filename}`
+    );
   } catch (error) {
     statusEl.textContent = `导入失败：${error.message}`;
   }
@@ -1062,24 +1335,48 @@ async function handleAiImage(pageId, planList, statusEl) {
     statusEl.textContent = "请先填写 AI 生图描述";
     return;
   }
-  statusEl.textContent = "正在 AI 生图…";
+  const count = getPageResultCount(planList, pageId);
+  statusEl.textContent = count > 1 ? `正在 AI 生图 ${count} 张…` : "正在 AI 生图…";
   try {
     const sessionId = ensureSessionId();
-    const generated = await window.noteGen.invoke("images:generate", {
+    const result = await window.noteGen.invoke("images:generate", {
       prompt,
       sessionId,
       label: pageId,
+      count,
     });
-    appState.sessionId = generated.sessionId;
-    appState.pageAssets[pageId] = {
-      absolutePath: generated.absolutePath,
-      relativePath: generated.relativePath,
-      source: "ai",
-    };
-    statusEl.textContent = `AI 生图完成：${generated.filename}`;
-    const renderBtn = document.querySelector("#card-render-btn");
-    renderPagePlan(planList, renderBtn, statusEl);
-    notify();
+    appState.sessionId = result.sessionId;
+    const images = result.images || [];
+    if (images.length <= 1) {
+      const image = images[0];
+      if (!image) {
+        throw new Error("未返回图片");
+      }
+      bindPageAsset(
+        pageId,
+        {
+          absolutePath: image.absolutePath,
+          relativePath: image.relativePath,
+          source: "ai",
+        },
+        planList,
+        statusEl,
+        `AI 生图完成：${image.filename || "已绑定"}`
+      );
+      return;
+    }
+    showImageCandidates(
+      pageId,
+      images.map((image) => ({
+        kind: "local",
+        absolutePath: image.absolutePath,
+        relativePath: image.relativePath,
+        source: "ai",
+      })),
+      planList,
+      statusEl,
+      `AI 已生成 ${images.length} 张，请选择一张绑定`
+    );
   } catch (error) {
     statusEl.textContent = `AI 生图失败：${error.message}`;
   }
@@ -1098,24 +1395,51 @@ async function handleStockImage(pageId, planList, statusEl) {
     statusEl.textContent = "请先填写图库搜索词";
     return;
   }
-  statusEl.textContent = `正在图库搜图：${keyword}…`;
+  const count = getPageResultCount(planList, pageId);
+  statusEl.textContent =
+    count > 1 ? `正在图库搜图：${keyword}（${count} 张）…` : `正在图库搜图：${keyword}…`;
   try {
     const sessionId = ensureSessionId();
-    const result = await window.noteGen.invoke("images:searchStock", {
+    if (count === 1) {
+      const result = await window.noteGen.invoke("images:searchStock", {
+        keyword,
+        sessionId,
+        label: pageId,
+      });
+      appState.sessionId = result.sessionId;
+      bindPageAsset(
+        pageId,
+        {
+          absolutePath: result.absolutePath,
+          relativePath: result.relativePath,
+          source: `stock:${result.provider}`,
+        },
+        planList,
+        statusEl,
+        `图库搜图完成（${result.provider}）`
+      );
+      return;
+    }
+
+    const { candidates } = await window.noteGen.invoke("images:searchStockCandidates", {
       keyword,
-      sessionId,
-      label: pageId,
+      count,
     });
-    appState.sessionId = result.sessionId;
-    appState.pageAssets[pageId] = {
-      absolutePath: result.absolutePath,
-      relativePath: result.relativePath,
-      source: `stock:${result.provider}`,
-    };
-    statusEl.textContent = `图库搜图完成（${result.provider}）`;
-    const renderBtn = document.querySelector("#card-render-btn");
-    renderPagePlan(planList, renderBtn, statusEl);
-    notify();
+    if (!candidates?.length) {
+      throw new Error("未找到匹配图片");
+    }
+    showImageCandidates(
+      pageId,
+      candidates.map((candidate) => ({
+        kind: "stock",
+        previewUrl: candidate.previewUrl,
+        source: candidate.provider,
+        candidate,
+      })),
+      planList,
+      statusEl,
+      `图库返回 ${candidates.length} 张候选，请选择一张绑定`
+    );
   } catch (error) {
     statusEl.textContent = `图库搜图失败：${error.message}`;
   }

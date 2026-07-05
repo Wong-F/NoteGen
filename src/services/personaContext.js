@@ -49,7 +49,7 @@ function buildPersonaPromptBlock(persona) {
     lines.push(`- 禁忌（不要出现）：${persona.taboos.join("、")}`);
   }
   if (persona.defaultHookLevel) {
-    lines.push(`- 标题钩子偏好：Level ${persona.defaultHookLevel}`);
+    lines.push(`- 标题风格偏好：Level ${persona.defaultHookLevel}`);
   }
   if (persona.visualAccent?.trim()) {
     lines.push(`- 卡片配色偏好：${persona.visualAccent.trim()}（页面计划 accent 字段优先使用此值）`);

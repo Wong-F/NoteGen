@@ -45,6 +45,10 @@ export const appState = {
 
   pageAssets: {},
 
+  /** @type {Record<string, Array<{ kind: "local" | "stock"; absolutePath?: string; relativePath?: string; previewUrl?: string; source?: string; candidate?: object }>>} */
+
+  pageImageCandidates: {},
+
   /** @type {Array<{ id: string; absolutePath: string }>} */
 
   renderedImages: [],
@@ -81,9 +85,9 @@ export const appState = {
 
   personaReady: false,
 
-  /** @type {boolean} */
+  /** @type {Array<{ role: "user" | "assistant"; content: string }>} */
 
-  workspaceReady: false,
+  chatMessages: [],
 
   /** @type {Array<() => void>} */
 
@@ -271,7 +275,11 @@ export function resetAppState() {
 
   appState.pageAssets = {};
 
+  appState.pageImageCandidates = {};
+
   appState.renderedImages = [];
+
+  appState.chatMessages = [];
 
   appState.activeSection = "idea";
 
@@ -324,7 +332,11 @@ export function hydrateFromWorkspace(workspace) {
 
   appState.pageAssets = workspace.pageAssets || {};
 
+  appState.pageImageCandidates = {};
+
   appState.renderedImages = workspace.renderedImages || [];
+
+  appState.chatMessages = workspace.chatMessages || [];
 
   appState.activeSection = workspace.activeSection || "idea";
 
@@ -395,6 +407,8 @@ export function snapshotWorkspace() {
     pageAssets: { ...appState.pageAssets },
 
     renderedImages: appState.renderedImages.map((img) => ({ ...img })),
+
+    chatMessages: (appState.chatMessages || []).map((message) => ({ ...message })),
 
     scroll: { ...appState.scroll },
 

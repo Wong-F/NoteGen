@@ -132,6 +132,13 @@ HTTP 状态码始终 200，前端**只看 `code === 200`** 判断成功。常见
 - **实际结果**：登录页、authService、IPC、设置账户信息框架、9 项单元测试全部通过
 - **偏差说明**：无；待后端提供测试账户后可直接联调 SIT 接口
 
+### 更新记录（2026-07-05）
+
+- **设备码策略**：后端确认桌面端可用 MAC 作为 `imei`。
+- **实现**：`resolvePhysicalMacAddress()` — 格式 `AABBCCDDEEFF`，以太网 > Wi-Fi > 其他物理网卡，跳过虚拟网卡；持久化 `device-id.json`；无 MAC 时回退 UUID。
+- **测试环境**：UUID 与 MAC 并行（已有 UUID 缓存不自动覆盖）；尚未交付终端用户。
+- **文档**：`docs/README.md` § Authentication / Development phases；`README.md` § 当前阶段。
+
 
 ---
 

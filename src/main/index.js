@@ -27,7 +27,7 @@ function createWindow() {
     height: 720,
     minWidth: 900,
     minHeight: 600,
-    title: "noteGen",
+    title: "笔记坊",
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,

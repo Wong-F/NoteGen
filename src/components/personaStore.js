@@ -3,6 +3,8 @@ import {
   getPersonaTemplate,
   getDefaultIdeaInput,
   fillIdeaInputDefaults,
+  buildKeywordsFromPersona,
+  isIdeaInputAtDefaults,
 } from "../constants/formDefaults.js";
 
 /** @type {Array<{ id: string; name: string; platform: string; primaryDomain: string; createdAt: string; updatedAt: string }>} */
@@ -105,6 +107,7 @@ export async function setActivePersona(id, options = {}) {
   appState.personaReady = true;
   notify();
   document.dispatchEvent(new CustomEvent("persona:activated", { detail: { id } }));
+  maybeSyncPersonaToWorkspace(detail);
   return detail;
 }
 
@@ -155,6 +158,7 @@ export async function savePersona(payload) {
   if (saved.id === appState.activePersonaId) {
     activePersonaDetail = saved;
     notify();
+    maybeSyncPersonaToWorkspace(saved);
   }
   return saved;
 }
@@ -185,26 +189,98 @@ export async function deletePersona(id) {
 
 /**
  * Apply persona defaults to idea input and style when starting a new workspace.
+ * @param {{ force?: boolean }} [options]
+ * @returns {boolean} whether ideaInput changed
  */
-export function applyPersonaDefaultsToWorkspace() {
+export function applyPersonaDefaultsToWorkspace(options = {}) {
   const persona = activePersonaDetail;
+  return syncIdeaInputFromPersona(persona, options);
+}
+
+/**
+ * Sync persona fields into workspace ideaInput when safe (defaults/empty) or forced.
+ * @param {PersonaDetail | null | undefined} persona
+ * @param {{ force?: boolean }} [options]
+ * @returns {boolean}
+ */
+export function syncIdeaInputFromPersona(persona, options = {}) {
+  if (!persona || !appState.workspaceReady) {
+    return false;
+  }
+
+  const boundPersonaId = appState.personaId;
+  if (boundPersonaId && boundPersonaId !== persona.id) {
+    return false;
+  }
+
   const workflowType = appState.workflowType || "xiaohongshu-note";
-  const ideaInput = fillIdeaInputDefaults(appState.ideaInput, workflowType);
+  const defaults = getDefaultIdeaInput(workflowType);
+  const force = Boolean(options.force);
+  const atDefaults = isIdeaInputAtDefaults(appState.ideaInput, workflowType);
+  if (!force && !atDefaults) {
+    return false;
+  }
 
-  if (persona?.primaryDomain?.trim()) {
-    ideaInput.keywords = persona.primaryDomain.trim();
+  const ideaInput = { ...fillIdeaInputDefaults(appState.ideaInput, workflowType) };
+  let changed = false;
+
+  const personaKeywords = buildKeywordsFromPersona(persona);
+  if (
+    personaKeywords &&
+    (force || !ideaInput.keywords?.trim() || ideaInput.keywords === defaults.keywords)
+  ) {
+    if (ideaInput.keywords !== personaKeywords) {
+      ideaInput.keywords = personaKeywords;
+      changed = true;
+    }
   }
-  if (persona?.targetReader?.trim()) {
-    ideaInput.targetReader = persona.targetReader.trim();
+
+  if (
+    persona.targetReader?.trim() &&
+    (force || !ideaInput.targetReader?.trim() || ideaInput.targetReader === defaults.targetReader)
+  ) {
+    const nextReader = persona.targetReader.trim();
+    if (ideaInput.targetReader !== nextReader) {
+      ideaInput.targetReader = nextReader;
+      changed = true;
+    }
   }
-  if (persona?.defaultHookLevel) {
-    ideaInput.hookLevel = persona.defaultHookLevel;
+
+  if (
+    persona.defaultHookLevel &&
+    (force || ideaInput.hookLevel === defaults.hookLevel)
+  ) {
+    if (ideaInput.hookLevel !== persona.defaultHookLevel) {
+      ideaInput.hookLevel = persona.defaultHookLevel;
+      changed = true;
+    }
   }
+
+  if (!changed) {
+    return false;
+  }
+
   appState.ideaInput = ideaInput;
-
-  if (!appState.styleId && persona?.defaultStyleId) {
+  if (!appState.styleId && persona.defaultStyleId) {
     appState.styleId = persona.defaultStyleId;
   }
+  notify();
+  document.dispatchEvent(new CustomEvent("persona:idea-synced"));
+  return true;
+}
+
+/**
+ * @param {PersonaDetail | null | undefined} persona
+ */
+function maybeSyncPersonaToWorkspace(persona) {
+  if (!persona || !appState.workspaceReady) {
+    return;
+  }
+  const boundPersonaId = appState.personaId;
+  if (boundPersonaId && boundPersonaId !== persona.id) {
+    return;
+  }
+  syncIdeaInputFromPersona(persona);
 }
 
 export function isPersonaStoreReady() {
