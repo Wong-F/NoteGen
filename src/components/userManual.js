@@ -100,6 +100,19 @@ const MANUAL_SECTIONS = [
     `,
   },
   {
+    id: "inline-ai",
+    title: "行内 AI 助手（Ctrl+K）",
+    body: `
+      <p>在任意文本框中，可随时召唤 AI 做<strong>局部改写</strong>或<strong>光标处生成</strong>，无需离开当前编辑位置：</p>
+      <ul>
+        <li><strong>改写</strong>：选中一段文字，点击浮出的「✦ AI 改写」气泡或按 <kbd>Ctrl</kbd> + <kbd>K</kbd>，输入指令（如「更口语一点」「压缩到 15 字」）</li>
+        <li><strong>插入</strong>：不选中任何文字直接按 <kbd>Ctrl</kbd> + <kbd>K</kbd>，输入想写的内容方向（如「补一句开头」「加一个转折」），AI 会结合上下文在光标处生成</li>
+        <li>在界面空白处按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 也有效：会自动回到你最近编辑的输入框光标位置</li>
+      </ul>
+      <p>生成结果先<strong>预览</strong>，可选择「采用 / 重试 / 放弃」；采用后随时可用 <kbd>Ctrl</kbd> + <kbd>Z</kbd> 撤销。改写与生成都会遵循当前人设的口吻。</p>
+    `,
+  },
+  {
     id: "preview",
     title: "预览、对话与导出",
     body: `
@@ -122,6 +135,21 @@ const MANUAL_SECTIONS = [
         <li><strong>图库 API</strong>：Pexels / Unsplash 密钥，用于免版权配图搜索</li>
       </ul>
       <p>保存前建议点击「测试文案连接」与「测试图库连接」确认可用。设置页也可<strong>重新观看新手教程</strong>。</p>
+      <p><strong>外观</strong>：设置顶部提供五套界面主题（云端 / 胭脂纸 / 墨夜 / 抹茶 / 奶油杏），点击即时生效并在重启后保持。夜间创作推荐「墨夜」。</p>
+    `,
+  },
+  {
+    id: "desktop",
+    title: "桌面体验细节",
+    body: `
+      <ul>
+        <li><strong>自动保存</strong>：所有编辑实时保存；直接关闭窗口也会先保存最后的改动</li>
+        <li><strong>窗口记忆</strong>：应用会记住上次的窗口位置、大小与最大化状态</li>
+        <li><strong>长任务提醒</strong>：AI 生成期间任务栏图标显示进度；窗口最小化或切走时，任务完成会弹系统通知，点击即可回到应用</li>
+        <li><strong>可取消</strong>：生成过程中状态栏旁有「取消」按钮，随时中止等待</li>
+        <li><strong>删除可撤销</strong>：删除创作 / 人设、清空对话后，底部提示条 5 秒内可点「撤销」无损恢复</li>
+        <li><strong>错误直达</strong>：因未配置 AI 服务导致的失败，提示中会附「打开设置」按钮</li>
+      </ul>
     `,
   },
   {
@@ -146,7 +174,11 @@ const MANUAL_SECTIONS = [
     body: `
       <dl class="manual-faq">
         <dt>生成失败或一直加载？</dt>
-        <dd>请检查设置中的 AI 服务地址、模型名称与 API Key，并点击「测试文案连接」。</dd>
+        <dd>请检查设置中的 AI 服务地址、模型名称与 API Key，并点击「测试文案连接」。等待过久可点状态栏旁的「取消」。</dd>
+        <dt>误删了创作或人设？</dt>
+        <dd>删除后 5 秒内点击底部提示条上的「撤销」即可完整恢复；超时后无法找回。</dd>
+        <dt>想换界面颜色？</dt>
+        <dd>设置 → 外观，共五套主题，点击即切换；夜间创作可选「墨夜」深色主题。</dd>
         <dt>配图搜索无结果？</dt>
         <dd>确认已填写 Pexels 或 Unsplash 密钥，并完成「测试图库连接」。</dd>
         <dt>如何切换平台（小红书 / 公众号）？</dt>
