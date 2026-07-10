@@ -30,3 +30,11 @@ desktop.ini
 
 # Test coverage
 coverage/
+
+# Local reference material (large binaries are never committed)
+*.pdf
+*.docx
+
+# External skill bundles kept locally, not part of the app
+guizang-social-card-skill/
+md2wechat-skill/

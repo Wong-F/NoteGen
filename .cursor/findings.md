@@ -1,5 +1,11 @@
 # 关键发现与技术结论
 
+## 2026-07-10 — 桌面交互改进实测发现
+
+- **Windows 关闭过程中 `BrowserWindow.isMaximized()` 返回 false**：在 `close` 事件里重新捕获窗口状态会把最大化误存为 false。结论：状态在 resize/move/maximize/unmaximize 事件时即时捕获，close 只负责落盘（`src/main/windowState.js`）。
+- **技术债（backlog #11）**：`inlineRewrite.js` 依赖已废弃的 `document.execCommand` 保撤销栈，Chromium 移除后会静默失效，届时需迁移到 `beforeinput`/InputEvent 方案。
+- 单实例锁与 second-instance 置前早已实现于 `main/index.js`，评审清单第 1 项实际只需补 `flashFrame` 反馈。
+
 ## 2026-07-03 — 复用 Skill 调研（选题/文案/配图三步流程）
 
 ### 决策记录
@@ -83,7 +89,8 @@
 ### 登录鉴权（AI 密钥分销平台）
 
 - 接口：`POST http://sit.xslq.work/sit/interface/api/publickey/normaltoken`
-- 字段映射：账户=手机号（`phone`），密码=密钥（`secret`）；`script=NoteGen`；`imei`=本地持久化 UUID。
+- 字段映射：账户=手机号（`phone`），密码=密钥（`secret`）；`script=NoteGen`；`imei`=设备标识（见下）。
+- **设备码（2026-07-05 更新）**：优先物理网卡 MAC，格式 `AABBCCDDEEFF`（以太网 > Wi-Fi > 其他；跳过虚拟网卡）；首次写入 `device-id.json` 后持久复用。无可用 MAC 时回退 UUID。测试环境 UUID 与 MAC **并行共存**（已有 UUID 缓存不自动迁移）。
 - 会话存 `userData/auth-session.json`；过期启动时自动用缓存凭证重试激活。
 - 开发后门：`13164150732` 免密，仅 `!app.isPackaged`（`npm run dev`）生效。
 - 设置页「账户」区展示订阅状态 / 能量点 / 到期时间；退出登录清除会话。

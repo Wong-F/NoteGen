@@ -1,5 +1,43 @@
 # 会话进展记录
 
+## 2026-07-10
+
+- **Ctrl+K 空白处语义修正（F1b）**：用户澄清空白处 Ctrl+K 应为「光标处 AI 生成插入」而非提示。新增 inline-insert prompt + `copyService.insertAtCursor` + `copy:insertAtCursor` 路由；inlineRewrite 双模式（选区=改写 / 无选区=插入），光标失焦保留特性定位插入点；测试 158/158
+- **桌面交互改进第二批：反馈修正 + Backlog 6–10**（规划同下，第二批章节）：
+  - Ctrl+K 全局生效（字段注册表 + 失焦选区回溯，无选区轻提示）；loading 改任务栏式扫光（token 化，深色主题适配）
+  - 删除全部可撤销：workspace（快照+save 复活）、人设（快照+create 重建）、清空对话（内存恢复）；confirm/alert 清零；新增 toast 组件
+  - AI 请求可取消（AiService.cancelInflight + CANCELLED 码 + 状态行「取消」按钮）；错误可行动化（errorText 映射 + 「打开设置」直达）
+  - 三弹层焦点三件套（overlayFocus.js）；成功状态 5 秒自动淡出
+  - 测试 153/153；渲染层模块 import 校验；dev 启动/关闭验证通过
+- **桌面交互规范改进前 5 项落地**（规划：`.planning/20260710_desktop_ux_improvements.md`，11 项清单见规划，6–11 为 backlog）：
+  - 二次启动置前 + 任务栏闪烁；窗口位置/尺寸/最大化记忆（新增 `main/windowState.js`）
+  - 关窗前 flush 创作内容（`main/appIpc.js` 握手 + 2s 超时兜底）
+  - 菜单/快捷键：新建 Ctrl+N、导出 Ctrl+E、设置 Ctrl+,、搜索 Ctrl+F
+  - 长任务任务栏进度 + 未聚焦时系统通知（渲染层 `longTask.js` 包裹五处 AI/导出调用）
+  - 修复实测 bug：Windows 关闭中 isMaximized() 返回 false，close 不再重捕获状态
+  - 测试 145/145；`npm run dev` 启动与优雅关闭均验证通过
+- **新增三套 UI 主题**（规划：`.planning/20260710_two_new_themes.md`，用户批准并选定三套）：
+  - `tokens.css` 新增 ink（墨夜·深色）/ matcha（抹茶·清新绿）/ cream（奶油杏·暖米白）覆盖块
+  - 新增 `--login-overlay`、`--status-*` token，修掉 login/manual 中深色主题会露馅的硬编码
+  - `THEMES` 注册（ESM+CJS）、swatch 预览、主题选择器改自适应网格
+  - 测试：137/137 通过（含新增 ESM/CJS 一致性用例）；Codex MCP 仍不可用，Review Gate 以内置自查替代
+
+## 2026-07-05
+
+- **人设同步选题 + 右栏对话 + 标题风格**（规划：`.planning/20260705_persona_sync_chat_tabs.md`）：
+  - 激活/保存/绑定人设时，若选题字段仍为模板默认值，自动填入人设的主副领域、目标读者、标题风格
+  - 「用人设新建」强制覆盖；普通新建在有活跃人设时也会尝试同步
+  - UI「钩子等级」改为「标题风格」（内部 `hookLevel` 不变）
+  - 右栏多标签：预览 | AI 对话，可关闭，视图菜单「显示预览 / 显示 AI 对话」重开
+  - 新增 `chatService` + `chat:send` IPC，对话历史随 workspace 持久化
+  - 测试：122/122 通过
+- **设备码改为 MAC 方案**（`authService.getDeviceId`）：
+  - 格式 `AABBCCDDEEFF`；优先以太网 > Wi-Fi > 其他物理网卡；过滤 WSL/Hyper-V/VPN 等虚拟网卡
+  - 仍持久化到 `device-id.json`；无 MAC 时回退 UUID
+  - 测试环境 UUID ∥ MAC 并行（用户确认可接受；尚未交付终端用户）
+  - 测试：`test/authService.test.js` 增至 10 项；全量 118 通过
+- **开发文档补全**：`docs/README.md` 新增 Authentication / Device id / 阶段快照；`README.md` 新增「当前阶段」表
+
 ## 2026-07-04
 
 - **Workspace 创作会话系统完成**（规划：`.planning/20260703_workspace_system.md`）：

@@ -14,7 +14,7 @@ Windows desktop app for AI-assisted note creation on **Xiaohongshu (小红书)**
 ```bash
 npm install    # Install dependencies
 npm run dev    # Launch Electron (single-instance lock enabled)
-npm test       # Run unit tests (125+ cases)
+npm test       # Run unit tests (155+ cases)
 npm run build  # Build renderer + main
 npm run dist   # Package Windows installer (NSIS)
 ```
@@ -137,6 +137,45 @@ Optional sidebar context for voice, taboos, default style, and platform. Workspa
 - State: `onboarding.json`; replay from **Settings → 重新观看新手教程**
 - UI: `src/components/onboardingTour.js`, `public/css/onboarding.css`
 
+### UI themes
+
+Five themes share one token contract in `public/css/tokens.css`; component CSS
+never branches on theme.
+
+| Theme id | Name | Look |
+|----------|------|------|
+| `cloud` (default, `:root`) | 云端 | Frosted floating panels, cool gradient canvas |
+| `blush` | 胭脂纸 | Warm paper, pill controls, crimson gradient |
+| `ink` | 墨夜 | Dark blue-black, dim frosted panels, bright accent |
+| `matcha` | 抹茶 | Creamy paper, matcha-green accent, pill controls |
+| `cream` | 奶油杏 | Warm off-white, muted apricot, soft corners |
+
+- Registry: `src/constants/themeOptions.js` (ESM) + `.cjs` mirror; picker in Settings renders from `THEMES`
+- Persistence: localStorage `notegen.theme`; `public/js/theme-boot.js` stamps `data-theme` before first paint (CSP forbids inline scripts)
+- DOM glue: `src/components/theme.js`
+
+### Inline AI rewrite & insert (Ctrl+K)
+
+`src/components/inlineRewrite.js` attaches to text fields (`attachFieldRewrite`):
+
+- **Selection → rewrite**: select text → floating bubble or Ctrl+K → instruction → old→new preview → apply in place (`copy:rewriteSelection`). `execCommand("insertText")` keeps the native undo stack.
+- **No selection → insert at caret**: Ctrl+K anywhere (fields keep caret/selection after blur; target ranked focused → last-focused → last-selection) → instruction → generated text previewed and inserted at the caret (`copy:insertAtCursor`, prompt `prompts/rewrite/inline-insert.yaml`).
+
+### Desktop UX conventions
+
+| Concern | Implementation |
+|---------|----------------|
+| Single instance | `requestSingleInstanceLock`; second launch restores/focuses and flashes the taskbar icon |
+| Window state | `src/main/windowState.js` → `%APPDATA%\notegen\window-state.json`; bounds validated against attached displays; state captured on resize/move events only (Windows reports un-maximized during close) |
+| Flush before close | Main intercepts `close` → `app:flushBeforeClose` → renderer `flushWorkspaceSave()` → `app:flushDone`; 2s timeout so a hung renderer never blocks quit (`src/main/appIpc.js`) |
+| Menu shortcuts | Ctrl+N new workspace, Ctrl+E export, Ctrl+, settings, Ctrl+F search, F1 manual (`src/main/appMenu.js` → `app:*` channels) |
+| Long tasks | `app:taskStarted/Finished` drive taskbar indeterminate progress; completion notifies via system Notification only when the window is unfocused (`src/components/longTask.js`) |
+| Undo over confirm | Deletions (workspace / persona / chat clear) act immediately and offer a 5s undo toast (`src/components/toast.js`); workspace restore via `workspaces:save` snapshot, persona via `personas:create` |
+| Cancellable AI | `AiService.cancelInflight()` + `ai:cancel` route; busy status lines render a 取消 button; user aborts map to `CANCELLED` (distinct from `TIMEOUT`) |
+| Actionable errors | `src/constants/errorText.js` strips IPC prefixes and maps AI errors to Chinese hints; config/auth/connection errors add an 打开设置 button (`src/components/statusLine.js`) |
+| Overlay a11y | Settings / persona / manual drawers: focus in on open, Escape closes, focus returns to trigger (`src/components/overlayFocus.js`) |
+| Loading | Buttons keep their label with an indeterminate sweep band (tokens `--sweep-on-accent` / `--sweep-on-surface`) |
+
 ## Authentication
 
 Production login uses the **AI key distribution platform** (not username/password).
@@ -178,6 +217,8 @@ Desktop apps have no phone IMEI. The backend accepts a **MAC address** as `imei`
 | `personas:*` | Persona CRUD |
 | `topics:suggest` | Topic generation |
 | `copy:generate` / `copy:humanize` / `copy:continueSection` | Copy pipeline |
+| `copy:rewriteSelection` / `copy:insertAtCursor` | Inline rewrite / generate-at-caret (Ctrl+K) |
+| `ai:cancel` | Abort in-flight AI requests |
 | `chat:send` | Free-form AI chat with workspace context |
 | `cards:plan` / `cards:render` | Image deck |
 | `images:generate` | AI image(s); `count` 1–6 returns `{ sessionId, images[] }` |
@@ -188,6 +229,7 @@ Desktop apps have no phone IMEI. The backend accepts a **MAC address** as `imei`
 | `images:fetchRemoteDataUrl` | HTTPS preview → data URL (main process fetch) |
 | `export:*` | Folder export + clipboard |
 | `onboarding:*` | Tour completion flags |
+| `app:*` | Main-window glue: menu actions, close-time flush handshake, long-task progress/notifications |
 
 ## Testing
 
@@ -195,7 +237,7 @@ Desktop apps have no phone IMEI. The backend accepts a **MAC address** as `imei`
 npm test
 ```
 
-Key suites: `copyService`, `chatService`, `exportService`, `platformPack`, `personaStoreService`, `workspaceStoreService`, `onboardingService`, `formDefaults`, `imageService`, `stockImageService`, `services` (registry smoke).
+Key suites: `copyService`, `chatService`, `exportService`, `platformPack`, `personaStoreService`, `workspaceStoreService`, `onboardingService`, `formDefaults`, `imageService`, `stockImageService`, `themeOptions`, `windowState`, `aiCancel`, `errorText`, `services` (registry smoke).
 
 ### Agent delivery checklist
 
@@ -207,7 +249,7 @@ See [design-philosophy.md](./design-philosophy.md). Read before UI/UX changes.
 
 ## Development phases
 
-The repo uses two **product phases** (see also `.agent-rules/core.md`). **Current snapshot (2026-07-05):**
+The repo uses two **product phases** (see also `.agent-rules/core.md`). **Current snapshot (2026-07-10):**
 
 | Phase | Intended scope | Status |
 |-------|----------------|--------|
@@ -232,6 +274,9 @@ The repo uses two **product phases** (see also `.agent-rules/core.md`). **Curren
 | Right panel preview + chat | Yes | — |
 | Image workspace thumbnails + multi-candidate | Yes | — |
 | Persona → idea field sync | Yes | — |
+| UI themes (5) + theme picker | Yes | — |
+| Inline AI rewrite / insert (Ctrl+K) | Yes | Migrate off deprecated `execCommand` (see `.cursor/findings.md`) |
+| Desktop UX (window state, close flush, shortcuts, notifications, undo, cancel) | Yes | Image generation not yet cancellable (own fetch path) |
 | AI calls | Local settings | Wire to user keys + `aipoint` in Phase 2 |
 
 Planning archives: `.planning/{YYYYMMDD}_{task}.md`. Multi-step work requires user approval before implementation.
