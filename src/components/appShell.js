@@ -88,6 +88,19 @@ export function mountApp(root, options = {}) {
 
 
   window.noteGen?.onMenuAction?.("app:openManual", () => userManual.open());
+  window.noteGen?.onMenuAction?.("app:openSettings", () => settings.open());
+  document.addEventListener("app:openSettingsRequest", () => settings.open());
+  window.noteGen?.onMenuAction?.("app:newWorkspace", () => {
+    createWorkspace().catch((error) => {
+      console.warn("[noteGen] menu new workspace failed:", error);
+    });
+  });
+  window.noteGen?.onMenuAction?.("app:focusSearch", () => {
+    document.getElementById("workspace-search")?.focus();
+  });
+  window.noteGen?.onMenuAction?.("app:exportPackage", () => {
+    document.getElementById("export-all-btn")?.click();
+  });
 
   bootWorkspaces(centerRoot).then(() => maybeStartWelcomeTour());
 }

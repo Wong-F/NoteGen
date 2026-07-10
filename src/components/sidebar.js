@@ -36,6 +36,8 @@ import { getPersonaSidebarLabel } from "./personaPanel.js";
 
 import { escapeHtml, escapeAttr } from "./utils.js";
 
+import { showToast } from "./toast.js";
+
 
 
 const SECTIONS = [
@@ -514,11 +516,9 @@ function renderWorkspaceList(listEl) {
 
       const title = item?.title || "此创作";
 
-      if (!window.confirm(`确定删除「${title}」？此操作不可撤销。`)) {
-
-        return;
-
-      }
+      // Snapshot first so the deletion can be undone losslessly:
+      // workspaces:save re-creates the file under the same id.
+      const snapshot = await window.noteGen.invoke("workspaces:get", { id });
 
       const result = await deleteWorkspace(id);
 
@@ -536,6 +536,18 @@ function renderWorkspaceList(listEl) {
 
         document.dispatchEvent(new CustomEvent("workspace:activated"));
 
+      }
+
+      if (snapshot) {
+        showToast(`已删除「${title}」`, {
+          actionLabel: "撤销",
+          onAction: async () => {
+            await window.noteGen.invoke("workspaces:save", snapshot);
+            await refreshWorkspaceList();
+            await switchWorkspace(snapshot.id);
+            document.dispatchEvent(new CustomEvent("workspace:activated"));
+          },
+        });
       }
 
     });

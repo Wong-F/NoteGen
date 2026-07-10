@@ -1,5 +1,7 @@
 import { appState, subscribe, deriveWorkspaceTitle } from "./appState.js";
 import { escapeHtml, escapeAttr } from "./utils.js";
+import { runLongTask } from "./longTask.js";
+import { renderStatus, renderErrorStatus } from "./statusLine.js";
 
 /**
  * Mount live preview panel with export actions.
@@ -154,22 +156,31 @@ async function handleExportAll(exportBtn, statusEl) {
     }
 
     statusEl.textContent = "正在导出…";
-    const result = await window.noteGen.invoke("export:saveToFolder", {
-      parentPath: pick.folderPath,
-      copy,
-      images: appState.renderedImages,
-      personaId: appState.personaId || undefined,
-      workflowType: appState.workflowType,
-      workspaceTitle: deriveWorkspaceTitle(),
-      folderName: suggest.folderName,
-    });
+    const result = await runLongTask(
+      () =>
+        window.noteGen.invoke("export:saveToFolder", {
+          parentPath: pick.folderPath,
+          copy,
+          images: appState.renderedImages,
+          personaId: appState.personaId || undefined,
+          workflowType: appState.workflowType,
+          workspaceTitle: deriveWorkspaceTitle(),
+          folderName: suggest.folderName,
+        }),
+      {
+        success: { title: "导出完成", body: "文案与图片已保存到所选文件夹" },
+        failure: { title: "导出失败", body: "回到笔记坊查看失败原因" },
+      }
+    );
 
     const primaryFile = result.platform === "wechat" ? "note.md + note.html" : "note.txt";
     const imageNote = result.imageCount ? `、${result.imageCount} 张图片` : "";
-    statusEl.textContent = `已导出到「${result.folderName}」（${primaryFile}${imageNote}）`;
+    renderStatus(statusEl, `已导出到「${result.folderName}」（${primaryFile}${imageNote}）`, {
+      transient: true,
+    });
     await window.noteGen.invoke("export:revealFolder", { folderPath: result.folderPath });
   } catch (error) {
-    statusEl.textContent = `导出失败：${error.message}`;
+    renderErrorStatus(statusEl, "导出失败", error);
   } finally {
     exportBtn.disabled = false;
   }

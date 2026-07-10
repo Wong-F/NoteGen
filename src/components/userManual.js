@@ -2,6 +2,8 @@
  * In-app user manual — opened from Help menu or settings.
  */
 
+import { bindOverlayA11y } from "./overlayFocus.js";
+
 const MANUAL_SECTIONS = [
   {
     id: "intro",
@@ -32,7 +34,7 @@ const MANUAL_SECTIONS = [
         <li><strong>用人设新建</strong>：已选择运营人设时，可一键带入口吻与领域设定</li>
         <li><strong>最近</strong>：列出历史项目，单击切换、双击重命名</li>
         <li><strong>搜索</strong>：在搜索框输入关键词快速定位</li>
-        <li><strong>删除</strong>：点击项目右侧 × 可删除（不可撤销）</li>
+        <li><strong>删除</strong>：点击项目右侧 × 可删除，删除后 5 秒内可通过底部提示撤销</li>
       </ul>
     `,
   },
@@ -127,6 +129,11 @@ const MANUAL_SECTIONS = [
     title: "快捷键",
     body: `
       <ul>
+        <li><kbd>Ctrl</kbd> + <kbd>N</kbd> — 新建创作</li>
+        <li><kbd>Ctrl</kbd> + <kbd>E</kbd> — 导出到文件夹</li>
+        <li><kbd>Ctrl</kbd> + <kbd>F</kbd> — 搜索创作</li>
+        <li><kbd>Ctrl</kbd> + <kbd>,</kbd> — 打开设置</li>
+        <li><kbd>Ctrl</kbd> + <kbd>K</kbd> — 选中文字 AI 改写；未选中时在光标处 AI 生成插入</li>
         <li><kbd>F1</kbd> — 打开本使用手册</li>
         <li><kbd>Ctrl</kbd> + <kbd>S</kbd> — 创作进度自动保存，无需手动操作</li>
         <li>菜单「编辑」— 撤销、复制、粘贴等标准快捷键</li>
@@ -204,14 +211,18 @@ export function mountUserManual(root) {
     });
   });
 
+  const a11y = bindOverlayA11y(overlay, { close, initialFocus: () => closeBtn });
+
   function open(sectionId) {
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("is-open"));
+    a11y.onOpen();
     showSection(sectionId || "intro");
   }
 
   function close() {
     overlay.classList.remove("is-open");
+    a11y.onClose();
     overlay.hidden = true;
   }
 
@@ -222,12 +233,6 @@ export function mountUserManual(root) {
     }
   });
   drawer.addEventListener("click", (event) => event.stopPropagation());
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !overlay.hidden) {
-      close();
-    }
-  });
 
   showSection("intro");
 

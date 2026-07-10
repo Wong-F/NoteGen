@@ -1,4 +1,6 @@
 import { replayWelcomeTour } from "./onboardingTour.js";
+import { THEMES, getStoredTheme, setTheme } from "./theme.js";
+import { bindOverlayA11y } from "./overlayFocus.js";
 
 /**
  * Mount settings drawer (triggered from sidebar user bar).
@@ -17,6 +19,20 @@ export function mountSettingsPanel(root, options = {}) {
         <button type="button" class="btn-ghost settings-close-btn" aria-label="关闭">✕</button>
       </div>
       <div class="settings-drawer-body">
+        <section class="settings-group">
+          <h3 class="settings-group-title">外观</h3>
+          <div class="theme-options" role="radiogroup" aria-label="界面主题">
+            ${THEMES.map(
+              (theme) => `
+              <button type="button" class="theme-option" role="radio"
+                data-theme-id="${theme.id}" aria-checked="false">
+                <span class="theme-option-swatch theme-option-swatch--${theme.id}"></span>
+                <span class="theme-option-name">${theme.name}</span>
+                <span class="theme-option-desc">${theme.desc}</span>
+              </button>`
+            ).join("")}
+          </div>
+        </section>
         <section class="settings-group">
           <h3 class="settings-group-title">帮助</h3>
           <p class="settings-help-text">需要详细说明时，可打开使用手册；也可重新观看新手教程。</p>
@@ -91,6 +107,24 @@ export function mountSettingsPanel(root, options = {}) {
   const replayTourBtn = overlay.querySelector("#settings-replay-tour-btn");
   const openManualBtn = overlay.querySelector("#settings-open-manual-btn");
   const statusEl = overlay.querySelector("#settings-status");
+  const themeButtons = [...overlay.querySelectorAll(".theme-option")];
+
+  function renderThemeButtons(activeId) {
+    for (const btn of themeButtons) {
+      const isActive = btn.dataset.themeId === activeId;
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-checked", String(isActive));
+    }
+  }
+
+  renderThemeButtons(getStoredTheme());
+
+  for (const btn of themeButtons) {
+    btn.addEventListener("click", () => {
+      const applied = setTheme(btn.dataset.themeId);
+      renderThemeButtons(applied);
+    });
+  }
 
   function renderAccountCard(profile) {
     if (!profile) {
@@ -128,14 +162,18 @@ export function mountSettingsPanel(root, options = {}) {
     logoutBtn.hidden = false;
   }
 
+  const a11y = bindOverlayA11y(overlay, { close, initialFocus: () => closeBtn });
+
   function open() {
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("is-open"));
+    a11y.onOpen();
     loadSettings();
   }
 
   function close() {
     overlay.classList.remove("is-open");
+    a11y.onClose();
     setTimeout(() => {
       overlay.hidden = true;
     }, 200);

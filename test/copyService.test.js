@@ -178,3 +178,134 @@ describe("CopyService", () => {
     assert.match(result.content, /续写的小节正文/);
   });
 });
+
+describe("CopyService.rewriteSelection", () => {
+  const rewriteAi = {
+    completeJson: async () => ({ replacement: "改写后的片段，衔接自然。" }),
+  };
+  const service = new CopyService(rewriteAi, {
+    promptCatalog: new PromptCatalog(promptsDir),
+    writerCatalog: new WriterCatalog(writersDir),
+  });
+
+  it("rejects empty selection", () => {
+    assert.throws(
+      () => service.buildRewriteSelectionMessages({ selection: "  ", instruction: "更口语" }),
+      /选中/
+    );
+  });
+
+  it("rejects empty instruction", () => {
+    assert.throws(
+      () => service.buildRewriteSelectionMessages({ selection: "一段文字", instruction: " " }),
+      /指令不能为空/
+    );
+  });
+
+  it("embeds field label, context, selection, instruction, and persona", () => {
+    const messages = service.buildRewriteSelectionMessages({
+      selection: "第一家在胡同里",
+      instruction: "换成更具体的地点描述",
+      fullText: "开头。<<<第一家在胡同里>>>结尾。",
+      fieldLabel: "笔记正文",
+      persona: {
+        name: "探店小分队",
+        platform: "xiaohongshu",
+        voiceSummary: "轻松真实",
+      },
+    });
+
+    assert.equal(messages[0].role, "system");
+    assert.match(messages[1].content, /笔记正文/);
+    assert.match(messages[1].content, /<<<第一家在胡同里>>>/);
+    assert.match(messages[1].content, /换成更具体的地点描述/);
+    assert.match(messages[1].content, /探店小分队/);
+  });
+
+  it("defaults field label and context placeholders", () => {
+    const messages = service.buildRewriteSelectionMessages({
+      selection: "片段",
+      instruction: "缩短",
+    });
+    assert.match(messages[1].content, /「正文」/);
+    assert.match(messages[1].content, /（无更多上下文）/);
+  });
+
+  it("returns trimmed replacement from mock LLM", async () => {
+    const result = await service.rewriteSelection({
+      selection: "第一家在胡同里",
+      instruction: "更口语",
+    });
+    assert.equal(result.replacement, "改写后的片段，衔接自然。");
+  });
+
+  it("throws when model returns no replacement", async () => {
+    const emptyAi = { completeJson: async () => ({ replacement: "  " }) };
+    const emptyService = new CopyService(emptyAi, {
+      promptCatalog: new PromptCatalog(promptsDir),
+      writerCatalog: new WriterCatalog(writersDir),
+    });
+    await assert.rejects(
+      emptyService.rewriteSelection({ selection: "片段", instruction: "改写" }),
+      /未返回改写结果/
+    );
+  });
+});
+
+describe("CopyService.insertAtCursor", () => {
+  const insertAi = {
+    completeJson: async () => ({ replacement: "生成的插入内容，衔接自然。" }),
+  };
+  const service = new CopyService(insertAi, {
+    promptCatalog: new PromptCatalog(promptsDir),
+    writerCatalog: new WriterCatalog(writersDir),
+  });
+
+  it("rejects empty instruction", () => {
+    assert.throws(
+      () => service.buildInsertAtCursorMessages({ instruction: "  " }),
+      /指令不能为空/
+    );
+  });
+
+  it("embeds field label, caret-marked context, instruction, and persona", () => {
+    const messages = service.buildInsertAtCursorMessages({
+      instruction: "补一句开头",
+      fullText: "<<<>>>正文从这里开始。",
+      fieldLabel: "笔记正文",
+      persona: { name: "探店小分队", platform: "xiaohongshu", voiceSummary: "轻松真实" },
+    });
+
+    assert.equal(messages[0].role, "system");
+    assert.match(messages[1].content, /笔记正文/);
+    assert.match(messages[1].content, /<<<>>>正文从这里开始。/);
+    assert.match(messages[1].content, /补一句开头/);
+    assert.match(messages[1].content, /探店小分队/);
+  });
+
+  it("defaults field label and empty-content placeholder", () => {
+    const messages = service.buildInsertAtCursorMessages({ instruction: "写个开头" });
+    assert.match(messages[1].content, /「正文」/);
+    assert.match(messages[1].content, /空白内容/);
+  });
+
+  it("returns trimmed replacement from mock LLM", async () => {
+    const result = await service.insertAtCursor({
+      instruction: "补一句总结",
+      fullText: "前文。<<<>>>",
+    });
+    assert.equal(result.replacement, "生成的插入内容，衔接自然。");
+  });
+
+  it("throws when model returns no content", async () => {
+    const emptyAi = { completeJson: async () => ({ replacement: " " }) };
+    const emptyService = new CopyService(emptyAi, {
+      promptCatalog: new PromptCatalog(promptsDir),
+      writerCatalog: new WriterCatalog(writersDir),
+    });
+    await assert.rejects(
+      emptyService.insertAtCursor({ instruction: "写点什么" }),
+      /未返回生成内容/
+    );
+  });
+});

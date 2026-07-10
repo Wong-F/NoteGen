@@ -12,6 +12,8 @@ import {
 import { createWorkspace } from "./workspaceStore.js";
 import { appState } from "./appState.js";
 import { getPersonaTemplate, TITLE_STYLE_OPTIONS } from "../constants/formDefaults.js";
+import { showToast } from "./toast.js";
+import { bindOverlayA11y } from "./overlayFocus.js";
 
 const PLATFORM_OPTIONS = [
   { id: "xiaohongshu", label: "小红书" },
@@ -156,14 +158,25 @@ export function mountPersonaPanel(root) {
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-persona-id");
         const item = personas.find((p) => p.id === id);
-        if (!id || !window.confirm(`确定删除运营人设「${item?.name || ""}」？`)) {
+        if (!id) {
           return;
         }
         try {
+          // Snapshot first: undo re-creates the persona from its fields
+          // (deletion is only allowed with no linked workspaces, so the
+          // new id breaks nothing).
+          const snapshot = await window.noteGen.invoke("personas:get", { id });
           await deletePersona(id);
           renderList();
+          showToast(`已删除人设「${item?.name || ""}」`, {
+            actionLabel: "撤销",
+            onAction: async () => {
+              await createPersona(snapshot || {});
+              renderList();
+            },
+          });
         } catch (error) {
-          window.alert(error.message || "删除失败");
+          showToast(`删除失败：${error.message}`);
         }
       });
     });
@@ -219,9 +232,12 @@ export function mountPersonaPanel(root) {
     formName.focus();
   }
 
+  const a11y = bindOverlayA11y(overlay, { close, initialFocus: () => closeBtn });
+
   function open(options = {}) {
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("is-open"));
+    a11y.onOpen();
     if (options.mode === "create") {
       openForm(null);
     } else if (options.mode === "edit" && options.personaId) {
@@ -233,6 +249,7 @@ export function mountPersonaPanel(root) {
 
   function close() {
     overlay.classList.remove("is-open");
+    a11y.onClose();
     setTimeout(() => {
       overlay.hidden = true;
       showList();

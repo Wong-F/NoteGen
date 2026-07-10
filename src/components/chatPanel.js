@@ -1,6 +1,42 @@
 import { appState, subscribe, notify } from "./appState.js";
 import { saveWorkspaceNow } from "./workspaceStore.js";
 import { escapeHtml } from "./utils.js";
+import { renderBusyStatus, renderErrorStatus } from "./statusLine.js";
+import { showToast } from "./toast.js";
+
+/**
+ * Group flat messages into user-led turns for sticky header layout.
+ * @param {Array<{ role: string; content: string }>} messages
+ */
+function groupIntoTurns(messages) {
+  /** @type {Array<{ user: object | null; replies: object[] }>} */
+  const turns = [];
+  let current = null;
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      if (current) {
+        turns.push(current);
+      }
+      current = { user: message, replies: [] };
+    } else if (current) {
+      current.replies.push(message);
+    } else {
+      turns.push({ user: null, replies: [message] });
+    }
+  }
+  if (current) {
+    turns.push(current);
+  }
+  return turns;
+}
+
+/**
+ * @param {{ role: string; content: string }} message
+ */
+function renderMessageBody(message) {
+  return escapeHtml(message.content).replace(/\n/g, "<br />");
+}
 
 /**
  * Mount free-form AI chat panel.
@@ -30,6 +66,42 @@ export function mountChatPanel(root) {
   const statusEl = root.querySelector("#chat-status");
 
   let sending = false;
+  let shouldStickToBottom = true;
+  /** @type {IntersectionObserver | null} */
+  let stickyObserver = null;
+
+  function isNearBottom() {
+    const distance = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+    return distance < 48;
+  }
+
+  function updateStickyStates() {
+    const containerTop = messagesEl.getBoundingClientRect().top;
+    for (const el of messagesEl.querySelectorAll(".chat-message--user")) {
+      const sentinel = el.querySelector(".chat-sticky-sentinel");
+      if (!sentinel) {
+        continue;
+      }
+      const isStuck = sentinel.getBoundingClientRect().top < containerTop;
+      el.classList.toggle("is-stuck", isStuck);
+    }
+  }
+
+  function observeStickySentinels() {
+    if (!stickyObserver) {
+      stickyObserver = new IntersectionObserver(() => updateStickyStates(), {
+        root: messagesEl,
+        threshold: [0, 1],
+      });
+      messagesEl.addEventListener("scroll", updateStickyStates, { passive: true });
+    }
+
+    stickyObserver.disconnect();
+    for (const sentinel of messagesEl.querySelectorAll(".chat-sticky-sentinel")) {
+      stickyObserver.observe(sentinel);
+    }
+    updateStickyStates();
+  }
 
   function renderMessages() {
     const messages = appState.chatMessages || [];
@@ -38,16 +110,33 @@ export function mountChatPanel(root) {
       return;
     }
 
-    messagesEl.innerHTML = messages
-      .map(
-        (message) => `
-        <div class="chat-message chat-message--${escapeHtml(message.role)}">
-          <div class="chat-message-body">${escapeHtml(message.content).replace(/\n/g, "<br />")}</div>
+    const turns = groupIntoTurns(messages);
+    messagesEl.innerHTML = turns
+      .map((turn, turnIndex) => {
+        const userBlock = turn.user
+          ? `
+        <div class="chat-message chat-message--user" style="z-index:${turnIndex + 1}">
+          <div class="chat-sticky-sentinel" aria-hidden="true"></div>
+          <div class="chat-message-body">${renderMessageBody(turn.user)}</div>
         </div>`
-      )
+          : "";
+        const replies = turn.replies
+          .map(
+            (reply) => `
+        <div class="chat-message chat-message--assistant">
+          <div class="chat-message-body">${renderMessageBody(reply)}</div>
+        </div>`
+          )
+          .join("");
+        return `<section class="chat-turn">${userBlock}${replies}</section>`;
+      })
       .join("");
 
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    observeStickySentinels();
+
+    if (shouldStickToBottom) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
   }
 
   function buildContextPayload() {
@@ -81,7 +170,8 @@ export function mountChatPanel(root) {
     sending = true;
     sendBtn.disabled = true;
     sendBtn.classList.add("is-loading");
-    statusEl.textContent = "思考中…";
+    renderBusyStatus(statusEl, "思考中…");
+    shouldStickToBottom = true;
 
     const userMessage = { role: "user", content: text };
     appState.chatMessages = [...(appState.chatMessages || []), userMessage];
@@ -105,11 +195,12 @@ export function mountChatPanel(root) {
       saveWorkspaceNow();
       notify();
     } catch (error) {
-      statusEl.textContent = `发送失败：${error.message}`;
+      renderErrorStatus(statusEl, "发送失败", error);
     } finally {
       sending = false;
       sendBtn.disabled = false;
       sendBtn.classList.remove("is-loading");
+      shouldStickToBottom = true;
       renderMessages();
     }
   }
@@ -126,17 +217,32 @@ export function mountChatPanel(root) {
     }
   });
 
+  messagesEl.addEventListener("scroll", () => {
+    shouldStickToBottom = isNearBottom();
+  }, { passive: true });
+
   clearBtn.addEventListener("click", () => {
     if (!appState.chatMessages?.length) {
       return;
     }
-    if (!window.confirm("确定清空当前创作的对话记录？")) {
-      return;
-    }
+    const cleared = appState.chatMessages;
+    const workspaceId = appState.activeWorkspaceId;
     appState.chatMessages = [];
     statusEl.textContent = "";
+    shouldStickToBottom = true;
     saveWorkspaceNow();
     notify();
+    showToast("已清空对话记录", {
+      actionLabel: "撤销",
+      onAction: () => {
+        if (appState.activeWorkspaceId !== workspaceId) {
+          throw new Error("已切换创作，无法恢复该对话");
+        }
+        appState.chatMessages = cleared;
+        saveWorkspaceNow();
+        notify();
+      },
+    });
   });
 
   subscribe(renderMessages);

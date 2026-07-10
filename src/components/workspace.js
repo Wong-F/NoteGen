@@ -8,7 +8,10 @@ import {
 } from "./appState.js";
 import { saveWorkspaceNow } from "./workspaceStore.js";
 import { escapeHtml, escapeAttr } from "./utils.js";
+import { attachFieldRewrite, getInlineRewrite } from "./inlineRewrite.js";
 import { TITLE_STYLE_OPTIONS, formatTitleStyleLabel } from "../constants/formDefaults.js";
+import { runLongTask } from "./longTask.js";
+import { renderStatus, renderErrorStatus, renderBusyStatus } from "./statusLine.js";
 
 /** @returns {{ personaId?: string; workflowType: string }} */
 function workspacePipelinePayload() {
@@ -20,6 +23,32 @@ function workspacePipelinePayload() {
 
 function isWechatArticle() {
   return appState.workflowType === "wechat-article";
+}
+
+/**
+ * Build a user-defined topic with the same shape as AI suggestions.
+ * @param {{ title: string; angle?: string; targetReader?: string }} payload
+ */
+function buildCustomTopic(payload) {
+  const title = payload.title?.trim();
+  if (!title) {
+    throw new Error("选题标题不能为空");
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    rank: 0,
+    title,
+    angle: payload.angle?.trim() || "用户自定义方向",
+    articleStructure: "",
+    targetReader:
+      payload.targetReader?.trim() ||
+      appState.ideaInput.targetReader?.trim() ||
+      "",
+    strategy: "custom",
+    recommendationReason: "",
+    source: "custom",
+  };
 }
 
 /** @returns {Array<{ heading: string; content: string }>} */
@@ -114,7 +143,7 @@ async function handleContinueSection(row, statusEl) {
     btn.disabled = true;
     btn.classList.add("is-loading");
   }
-  statusEl.textContent = "正在续写小节…";
+  renderBusyStatus(statusEl, "正在续写小节…");
 
   try {
     const result = await window.noteGen.invoke("copy:continueSection", {
@@ -136,10 +165,10 @@ async function handleContinueSection(row, statusEl) {
     }
     syncCopyFromEditor();
     saveWorkspaceNow();
-    statusEl.textContent = "小节已生成，可继续编辑或再次续写";
+    renderStatus(statusEl, "小节已生成，可继续编辑或再次续写", { transient: true });
     notify();
   } catch (error) {
-    statusEl.textContent = `小节续写失败：${error.message}`;
+    renderErrorStatus(statusEl, "小节续写失败", error);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -152,6 +181,10 @@ async function handleContinueSection(row, statusEl) {
 function bindSectionRowEvents(row, statusEl) {
   row.querySelectorAll(".section-heading-input, .section-content-input").forEach((el) => {
     el.addEventListener("input", syncCopyFromEditor);
+    attachFieldRewrite(el, {
+      fieldLabel: el.classList.contains("section-heading-input") ? "小节标题" : "小节正文",
+      getPayloadExtras: workspacePipelinePayload,
+    });
   });
   row.querySelector(".copy-section-continue-btn")?.addEventListener("click", () => {
     handleContinueSection(row, statusEl);
@@ -266,7 +299,7 @@ function getIdeaHtml() {
   return `
     <div class="workspace-header">
       <h2 class="workspace-title">选题</h2>
-      <p class="workspace-desc">输入领域或关键词，AI 帮你找到值得写的角度</p>
+      <p class="workspace-desc">输入领域或关键词生成候选，或直接填写自定义选题</p>
     </div>
     <div class="workspace-fields">
       <input id="keywords-input" type="text" class="field-borderless"
@@ -287,6 +320,16 @@ function getIdeaHtml() {
     </div>
     <p id="topic-status" class="workspace-status" aria-live="polite"></p>
     <div id="topic-list" class="topic-list" ${appState.generatedTopics.length ? "" : "hidden"}></div>
+    <div class="topic-custom">
+      <p class="topic-custom-label">自定义选题</p>
+      <input id="custom-topic-title" type="text" class="field-borderless"
+        placeholder="标题，例如：如何挑对第一双跑步鞋？"
+        value="${escapeAttr(appState.selectedTopic?.source === "custom" ? appState.selectedTopic.title : "")}" />
+      <input id="custom-topic-angle" type="text" class="field-borderless field-secondary"
+        placeholder="切入角度（可选），例如：从跑鞋类型和场景对比讲解"
+        value="${escapeAttr(appState.selectedTopic?.source === "custom" ? appState.selectedTopic.angle : "")}" />
+      <button id="custom-topic-apply-btn" type="button" class="btn-secondary">使用此选题</button>
+    </div>
     ${
       topic
         ? `<div class="workspace-selected">
@@ -419,6 +462,41 @@ function bindIdeaEvents(root) {
     renderTopicList(topicList, { topics: appState.generatedTopics }, statusEl, true);
   }
 
+  const customTitleInput = root.querySelector("#custom-topic-title");
+  const customAngleInput = root.querySelector("#custom-topic-angle");
+  const customApplyBtn = root.querySelector("#custom-topic-apply-btn");
+
+  customApplyBtn?.addEventListener("click", () => {
+    const title = customTitleInput?.value.trim();
+    if (!title) {
+      statusEl.textContent = "请先填写自定义选题标题";
+      customTitleInput?.focus();
+      return;
+    }
+
+    try {
+      const topic = buildCustomTopic({
+        title,
+        angle: customAngleInput?.value || "",
+        targetReader: targetReaderInput?.value || "",
+      });
+      appState.generatedTopics = [...appState.generatedTopics, topic];
+      if (topicList) {
+        renderTopicList(topicList, { topics: appState.generatedTopics }, statusEl, true);
+      }
+      onTopicSelected(topic, statusEl);
+    } catch (error) {
+      statusEl.textContent = error.message;
+    }
+  });
+
+  customTitleInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      customApplyBtn?.click();
+    }
+  });
+
   suggestBtn.addEventListener("click", async () => {
     if (!window.noteGen?.invoke) {
       statusEl.textContent = "请通过 Electron 启动应用（npm run dev）";
@@ -431,27 +509,34 @@ function bindIdeaEvents(root) {
       return;
     }
 
-    statusEl.textContent = "正在生成选题候选…";
+    renderBusyStatus(statusEl, "正在生成选题候选…");
     topicList.hidden = true;
     suggestBtn.disabled = true;
     suggestBtn.classList.add("is-loading");
 
     try {
-      const result = await window.noteGen.invoke("topics:suggest", {
-        keywords,
-        targetReader: targetReaderInput.value.trim(),
-        hookLevel: Number(hookLevelSelect.value),
-        count: 5,
-        ...workspacePipelinePayload(),
-      });
+      const result = await runLongTask(
+        () =>
+          window.noteGen.invoke("topics:suggest", {
+            keywords,
+            targetReader: targetReaderInput.value.trim(),
+            hookLevel: Number(hookLevelSelect.value),
+            count: 5,
+            ...workspacePipelinePayload(),
+          }),
+        {
+          success: { title: "选题已生成", body: "回到笔记坊挑选一个方向继续创作" },
+          failure: { title: "选题生成失败", body: "回到笔记坊查看失败原因" },
+        }
+      );
 
       renderTopicList(topicList, result, statusEl);
       appState.generatedTopics = result.topics;
       const summary = result.domainSummary ? ` · ${result.domainSummary}` : "";
-      statusEl.textContent = `已生成 ${result.topics.length} 个选题${summary}`;
+      renderStatus(statusEl, `已生成 ${result.topics.length} 个选题${summary}`, { transient: true });
       saveWorkspaceNow();
     } catch (error) {
-      statusEl.textContent = `选题生成失败：${error.message}`;
+      renderErrorStatus(statusEl, "选题生成失败", error);
     } finally {
       suggestBtn.disabled = false;
       suggestBtn.classList.remove("is-loading");
@@ -467,23 +552,48 @@ function bindIdeaEvents(root) {
  */
 function renderTopicList(topicList, result, statusEl, restoreOnly = false) {
   topicList.innerHTML = result.topics
-    .map(
-      (topic) => `
-      <button type="button" class="topic-item${appState.selectedTopic?.id === topic.id ? " is-selected" : ""}" data-topic-id="${topic.id}">
-        <span class="topic-item-rank">#${topic.rank}</span>
-        <span class="topic-item-title">${escapeHtml(topic.title)}</span>
-        <span class="topic-item-angle">${escapeHtml(topic.angle)}</span>
+    .map((topic) => {
+      const isCustom = topic.source === "custom";
+      const rankLabel = isCustom ? "自定" : `#${topic.rank}`;
+      return `
+      <button type="button" class="topic-item${appState.selectedTopic?.id === topic.id ? " is-selected" : ""}${isCustom ? " topic-item--custom" : ""}" data-topic-id="${topic.id}">
+        <span class="topic-refine-btn" role="button" tabindex="0" title="AI 微调这条选题">✦</span>
+        <span class="topic-item-rank${isCustom ? " topic-item-rank--custom" : ""}">${rankLabel}</span>
+        <span class="topic-item-title" data-topic-field="title">${escapeHtml(topic.title)}</span>
+        <span class="topic-item-angle" data-topic-field="angle">${escapeHtml(topic.angle)}</span>
       </button>
-    `
-    )
+    `;
+    })
     .join("");
   topicList.hidden = false;
 
+  const updateTopic = (id, patch) => {
+    const topics = appState.generatedTopics.map((item) =>
+      item.id === id ? { ...item, ...patch } : item
+    );
+    appState.generatedTopics = topics;
+    if (appState.selectedTopic?.id === id) {
+      appState.selectedTopic = topics.find((item) => item.id === id) || appState.selectedTopic;
+    }
+    renderTopicList(topicList, { topics }, statusEl, restoreOnly);
+    notify();
+    saveWorkspaceNow();
+  };
+
   topicList.querySelectorAll(".topic-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.getAttribute("data-topic-id");
-      const topic = result.topics.find((item) => item.id === id);
-      if (!topic) {
+    const id = button.getAttribute("data-topic-id");
+    const topic = result.topics.find((item) => item.id === id);
+    if (!topic) {
+      return;
+    }
+
+    button.addEventListener("click", (e) => {
+      if (e.target.closest(".topic-refine-btn")) {
+        return;
+      }
+      // Ignore clicks that end a text-selection drag inside the card.
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && button.contains(selection.anchorNode)) {
         return;
       }
       topicList.querySelectorAll(".topic-item").forEach((el) => {
@@ -491,6 +601,104 @@ function renderTopicList(topicList, result, statusEl, restoreOnly = false) {
       });
       onTopicSelected(topic, statusEl, restoreOnly);
     });
+
+    bindTopicRewrite(button, topic, updateTopic);
+  });
+}
+
+/**
+ * Wire Cursor-style rewrite onto one topic card: select text inside the
+ * title/angle to rewrite that fragment, or hit the ✦ button to refine the
+ * whole topic per instruction.
+ * @param {HTMLElement} button
+ * @param {object} topic
+ * @param {(id: string, patch: object) => void} updateTopic
+ */
+function bindTopicRewrite(button, topic, updateTopic) {
+  const widget = getInlineRewrite();
+  const contextText = (markField, markStart, markEnd) => {
+    const mark = (field, text) =>
+      field === markField
+        ? `${text.slice(0, markStart)}<<<${text.slice(markStart, markEnd)}>>>${text.slice(markEnd)}`
+        : text;
+    return `选题标题：${mark("title", topic.title)}\n切入角：${mark("angle", topic.angle)}`;
+  };
+
+  button.addEventListener("mouseup", (e) => {
+    if (e.button !== 0) {
+      return;
+    }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      const span = range.startContainer.parentElement?.closest("[data-topic-field]");
+      // Only handle selections inside a single title/angle span of this card.
+      if (
+        !span ||
+        !button.contains(span) ||
+        range.startContainer !== range.endContainer ||
+        range.startContainer.nodeType !== Node.TEXT_NODE
+      ) {
+        return;
+      }
+      const field = span.getAttribute("data-topic-field");
+      const source = field === "title" ? topic.title : topic.angle;
+      const start = range.startOffset;
+      const end = range.endOffset;
+      const fragment = source.slice(start, end);
+      if (!fragment.trim()) {
+        return;
+      }
+      widget.open(
+        { x: e.clientX, y: e.clientY },
+        {
+          fieldLabel: field === "title" ? "选题标题" : "选题切入角",
+          selection: fragment,
+          fullText: contextText(field, start, end),
+          getPayloadExtras: workspacePipelinePayload,
+          isStale: () => false,
+          apply: (replacement) => {
+            const next = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
+            updateTopic(topic.id, { [field]: next });
+          },
+        }
+      );
+    }, 0);
+  });
+
+  const refineBtn = button.querySelector(".topic-refine-btn");
+  const openWholeCardRefine = () => {
+    const rect = refineBtn.getBoundingClientRect();
+    widget.open(
+      { x: rect.left, y: rect.top },
+      {
+        fieldLabel: "整条选题（保持「选题标题：…\\n切入角：…」两行格式）",
+        selection: `选题标题：${topic.title}\n切入角：${topic.angle}`,
+        fullText: contextText(null, 0, 0),
+        getPayloadExtras: workspacePipelinePayload,
+        isStale: () => false,
+        apply: (replacement) => {
+          const match = replacement.match(/选题标题[:：]\s*([^\n]+)[\s\S]*?切入角[:：]\s*([^\n]+)/);
+          if (match) {
+            updateTopic(topic.id, { title: match[1].trim(), angle: match[2].trim() });
+          } else {
+            // Model dropped the two-line format — treat the text as a new title.
+            updateTopic(topic.id, { title: replacement.split("\n")[0].trim() });
+          }
+        },
+      },
+      { direct: true }
+    );
+  };
+  refineBtn?.addEventListener("click", openWholeCardRefine);
+  refineBtn?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openWholeCardRefine();
+    }
   });
 }
 
@@ -547,22 +755,29 @@ function bindWritingEvents(root) {
       return;
     }
 
-    statusEl.textContent = "正在生成文案…";
+    renderBusyStatus(statusEl, "正在生成文案…");
     generateBtn.disabled = true;
     generateBtn.classList.add("is-loading");
 
     try {
-      const result = await window.noteGen.invoke("copy:generate", {
-        title: topic.title,
-        angle: topic.angle,
-        targetReader: topic.targetReader,
-        styleId: styleSelect.value,
-        ...workspacePipelinePayload(),
-      });
+      const result = await runLongTask(
+        () =>
+          window.noteGen.invoke("copy:generate", {
+            title: topic.title,
+            angle: topic.angle,
+            targetReader: topic.targetReader,
+            styleId: styleSelect.value,
+            ...workspacePipelinePayload(),
+          }),
+        {
+          success: { title: "文案已生成", body: "回到笔记坊查看并编辑文案" },
+          failure: { title: "文案生成失败", body: "回到笔记坊查看失败原因" },
+        }
+      );
       appState.styleId = styleSelect.value;
       showCopy(result, titleInput, bodyInput, hashtagsInput, humanizeBtn, statusEl);
     } catch (error) {
-      statusEl.textContent = `文案生成失败：${error.message}`;
+      renderErrorStatus(statusEl, "文案生成失败", error);
     } finally {
       generateBtn.disabled = false;
       generateBtn.classList.remove("is-loading");
@@ -576,7 +791,7 @@ function bindWritingEvents(root) {
       return;
     }
 
-    statusEl.textContent = "正在去 AI 味…";
+    renderBusyStatus(statusEl, "正在去 AI 味…");
     humanizeBtn.disabled = true;
     humanizeBtn.classList.add("is-loading");
 
@@ -605,24 +820,41 @@ function bindWritingEvents(root) {
       notify();
       saveWorkspaceNow();
     } catch (error) {
-      statusEl.textContent = `去 AI 味失败：${error.message}`;
+      renderErrorStatus(statusEl, "去 AI 味失败", error);
     } finally {
       humanizeBtn.disabled = false;
       humanizeBtn.classList.remove("is-loading");
     }
   });
 
+  const isWechat = isWechatArticle();
   if (titleInput) {
     titleInput.addEventListener("input", syncCopyFromEditor);
+    attachFieldRewrite(titleInput, {
+      fieldLabel: isWechat ? "文章标题（≤25 字）" : "笔记标题（≤20 字）",
+      getPayloadExtras: workspacePipelinePayload,
+    });
   }
   if (bodyInput) {
     bodyInput.addEventListener("input", syncCopyFromEditor);
+    attachFieldRewrite(bodyInput, {
+      fieldLabel: isWechat ? "文章引言" : "笔记正文",
+      getPayloadExtras: workspacePipelinePayload,
+    });
   }
   if (summaryInput) {
     summaryInput.addEventListener("input", syncCopyFromEditor);
+    attachFieldRewrite(summaryInput, {
+      fieldLabel: "文章摘要（50-80 字）",
+      getPayloadExtras: workspacePipelinePayload,
+    });
   }
   if (hashtagsInput) {
     hashtagsInput.addEventListener("input", syncCopyFromEditor);
+    attachFieldRewrite(hashtagsInput, {
+      fieldLabel: "话题标签",
+      getPayloadExtras: workspacePipelinePayload,
+    });
   }
 }
 
@@ -747,7 +979,7 @@ function bindImagesEvents(root) {
       return;
     }
     appState.copyDraft = copy;
-    statusEl.textContent = "正在规划页面…";
+    renderBusyStatus(statusEl, "正在规划页面…");
     planBtn.disabled = true;
     planBtn.classList.add("is-loading");
 
@@ -761,7 +993,7 @@ function bindImagesEvents(root) {
       statusEl.textContent = `已规划 ${plan.pages.length} 页，请为需要素材的页面配图`;
       saveWorkspaceNow();
     } catch (error) {
-      statusEl.textContent = `规划失败：${error.message}`;
+      renderErrorStatus(statusEl, "规划失败", error);
     } finally {
       planBtn.disabled = false;
       planBtn.classList.remove("is-loading");
@@ -785,11 +1017,18 @@ function bindImagesEvents(root) {
         for (const [pageId, asset] of Object.entries(appState.pageAssets)) {
           pageAssets[pageId] = asset.absolutePath;
         }
-        const result = await window.noteGen.invoke("cards:render", {
-          sessionId,
-          plan: appState.pagePlan,
-          pageAssets,
-        });
+        const result = await runLongTask(
+          () =>
+            window.noteGen.invoke("cards:render", {
+              sessionId,
+              plan: appState.pagePlan,
+              pageAssets,
+            }),
+          {
+            success: { title: "卡片已渲染", body: "回到笔记坊查看生成的卡片" },
+            failure: { title: "卡片渲染失败", body: "回到笔记坊查看失败原因" },
+          }
+        );
         appState.sessionId = result.sessionId;
         appState.renderedImages = result.images;
         markSectionDone("images");
@@ -797,7 +1036,7 @@ function bindImagesEvents(root) {
         notify();
         saveWorkspaceNow();
       } catch (error) {
-        statusEl.textContent = `渲染失败：${error.message}`;
+        renderErrorStatus(statusEl, "渲染失败", error);
       } finally {
         renderBtn.disabled = false;
         renderBtn.classList.remove("is-loading");
@@ -1339,12 +1578,19 @@ async function handleAiImage(pageId, planList, statusEl) {
   statusEl.textContent = count > 1 ? `正在 AI 生图 ${count} 张…` : "正在 AI 生图…";
   try {
     const sessionId = ensureSessionId();
-    const result = await window.noteGen.invoke("images:generate", {
-      prompt,
-      sessionId,
-      label: pageId,
-      count,
-    });
+    const result = await runLongTask(
+      () =>
+        window.noteGen.invoke("images:generate", {
+          prompt,
+          sessionId,
+          label: pageId,
+          count,
+        }),
+      {
+        success: { title: "AI 生图完成", body: "回到笔记坊查看生成的配图" },
+        failure: { title: "AI 生图失败", body: "回到笔记坊查看失败原因" },
+      }
+    );
     appState.sessionId = result.sessionId;
     const images = result.images || [];
     if (images.length <= 1) {
@@ -1378,7 +1624,7 @@ async function handleAiImage(pageId, planList, statusEl) {
       `AI 已生成 ${images.length} 张，请选择一张绑定`
     );
   } catch (error) {
-    statusEl.textContent = `AI 生图失败：${error.message}`;
+    renderErrorStatus(statusEl, "AI 生图失败", error);
   }
 }
 
@@ -1441,6 +1687,6 @@ async function handleStockImage(pageId, planList, statusEl) {
       `图库返回 ${candidates.length} 张候选，请选择一张绑定`
     );
   } catch (error) {
-    statusEl.textContent = `图库搜图失败：${error.message}`;
+    renderErrorStatus(statusEl, "图库搜图失败", error);
   }
 }

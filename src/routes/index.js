@@ -47,6 +47,10 @@ function registerRoutes(services) {
     return services.aiService.testConnection();
   });
 
+  ipcMain.handle("ai:cancel", async () => {
+    return services.aiService.cancelInflight();
+  });
+
   ipcMain.handle("chat:send", async (_event, payload) => {
     return services.chatService.send(payload || {}, services.personaStoreService);
   });
@@ -68,6 +72,16 @@ function registerRoutes(services) {
   ipcMain.handle("copy:humanize", async (_event, payload) => {
     const persona = resolvePersona(services.personaStoreService, payload?.personaId);
     return services.copyService.humanize({ ...payload, persona });
+  });
+
+  ipcMain.handle("copy:rewriteSelection", async (_event, payload) => {
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.copyService.rewriteSelection({ ...payload, persona });
+  });
+
+  ipcMain.handle("copy:insertAtCursor", async (_event, payload) => {
+    const persona = resolvePersona(services.personaStoreService, payload?.personaId);
+    return services.copyService.insertAtCursor({ ...payload, persona });
   });
 
   ipcMain.handle("copy:continueSection", async (_event, payload) => {

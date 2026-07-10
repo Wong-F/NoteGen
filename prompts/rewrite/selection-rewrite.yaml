@@ -1,0 +1,32 @@
+name: selection-rewrite
+kind: rewrite
+description: 局部改写选中片段，保持上下文衔接与人设语气（选题/文案通用）
+version: "1.0"
+variables:
+  - FIELD_LABEL
+  - FULL_TEXT
+  - SELECTION
+  - INSTRUCTION
+template: |
+  用户在编辑「{{FIELD_LABEL}}」时选中了一段文字，希望你按指令只改写选中的部分。
+
+  ## 改写规则
+  1. 只改写「选中片段」；你输出的文本会原位替换它，必须与前后文自然衔接（人称、语气、标点连贯）。
+  2. 严格执行「修改指令」；指令没提到的方面尽量保持原样。
+  3. 长度与原片段相近，除非指令明确要求加长或缩短；不要编造原文没有的新事实。
+  4. 只输出替换文本本身：不要包含选中片段之外的内容，不要加引号，不要解释。
+
+  ## 输出格式
+  Return strict JSON only：
+  {
+    "replacement": "替换选中片段的新文本"
+  }
+
+  ## 全文上下文（选中片段已用 <<< >>> 标出）
+  {{FULL_TEXT}}
+
+  ## 选中片段
+  {{SELECTION}}
+
+  ## 修改指令
+  {{INSTRUCTION}}

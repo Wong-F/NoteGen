@@ -1,5 +1,21 @@
 import { mountApp } from "../components/appShell.js";
 import { mountLoginPage } from "../components/loginPage.js";
+import { initTheme } from "../components/theme.js";
+
+initTheme();
+
+// Flush pending workspace saves when the main process is about to close the
+// window. Always reply so a failed flush can never block quitting.
+window.noteGen?.onMenuAction?.("app:flushBeforeClose", async () => {
+  try {
+    const { flushWorkspaceSave } = await import("../components/workspaceStore.js");
+    await flushWorkspaceSave();
+  } catch (error) {
+    console.warn("[noteGen] flush before close failed:", error);
+  } finally {
+    window.noteGen?.invoke?.("app:flushDone");
+  }
+});
 
 function getRoot() {
   const root = document.getElementById("app");

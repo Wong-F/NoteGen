@@ -1,28 +1,101 @@
+/*
+ * Design tokens — two themes share one token contract.
+ *
+ * :root                     = "cloud" theme (default): floating frosted panels
+ *                             on a cool gradient canvas, spring motion.
+ * html[data-theme="blush"]  = "blush" theme: warm paper tones, pill-shaped
+ *                             controls, crimson gradient accent.
+ * html[data-theme="ink"]    = "ink" theme: dark blue-black canvas, dim frosted
+ *                             panels, bright accent for night-time writing.
+ * html[data-theme="matcha"] = "matcha" theme: creamy paper canvas, matcha-green
+ *                             accent, pill controls.
+ * html[data-theme="cream"]  = "cream" theme: warm off-white minimal canvas,
+ *                             muted apricot accent, soft corners.
+ *
+ * Component CSS must consume tokens only — never branch on theme.
+ */
+
 :root {
-  /* Background & surfaces */
-  --color-bg: #f7f7f8;
+  /* Canvas & surfaces */
+  --canvas-bg: linear-gradient(160deg, #f3f5f9 0%, #eef1f6 60%, #f0eef5 100%);
+  --color-bg: #f0f2f6;
   --color-surface: #ffffff;
-  --color-surface-hover: #fafafa;
+  --color-surface-hover: #f4f5f8;
+  --color-surface-muted: #eef0f4;
+
+  /* Floating panels (sidebar / center / preview) */
+  --panel-bg: rgba(255, 255, 255, 0.72);
+  --panel-bg-strong: rgba(255, 255, 255, 0.85);
+  --panel-blur: blur(14px);
+  --panel-border: 1px solid rgba(255, 255, 255, 0.6);
+  --panel-radius: 14px;
+  --panel-gap: 12px;
 
   /* Text */
-  --color-text: #1a1a1a;
-  --color-text-secondary: #6b6b6b;
-  --color-text-tertiary: #9b9b9b;
+  --color-text: #23262d;
+  --color-text-secondary: #5a5f68;
+  --color-text-tertiary: #9aa0ad;
 
   /* Borders */
-  --color-border: rgba(0, 0, 0, 0.06);
-  --color-border-strong: rgba(0, 0, 0, 0.1);
+  --color-border: rgba(60, 70, 100, 0.08);
+  --color-border-subtle: rgba(60, 70, 100, 0.05);
+  --color-border-strong: rgba(60, 70, 100, 0.16);
 
   /* Brand accent — primary buttons, active states, AI actions only */
   --color-accent: #ff2442;
   --color-accent-hover: #e01e3c;
   --color-accent-subtle: rgba(255, 36, 66, 0.08);
+  --color-danger: #e53e3e;
+
+  /* Status messages (login/auth feedback) */
+  --status-error-text: #c62828;
+  --status-error-bg: rgba(198, 40, 40, 0.1);
+  --status-success-text: #1b5e20;
+  --status-success-bg: rgba(27, 94, 32, 0.1);
+
+  /* Login page scrim over the background image */
+  --login-overlay: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(247, 247, 248, 0.42) 45%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+
+  /* Primary button */
+  --btn-primary-bg: var(--color-accent);
+  --btn-primary-bg-hover: var(--color-accent-hover);
+  --btn-primary-shadow: 0 6px 16px -6px rgba(255, 36, 66, 0.55);
+  --radius-control: var(--radius-pill);
+
+  /* Nav items (sidebar) */
+  --radius-nav: 9px;
+  --nav-active-bg: #ffffff;
+  --nav-active-color: #16181d;
+  --nav-active-shadow: 0 3px 12px -4px rgba(50, 60, 90, 0.22);
+
+  /* Cards */
+  --card-bg: #ffffff;
+  --card-border: 1px solid transparent;
+  --card-radius: 12px;
+  --shadow-card: 0 2px 10px -4px rgba(50, 60, 90, 0.14);
+  --shadow-card-hover: 0 10px 24px -8px rgba(50, 60, 90, 0.28);
+
+  /* Elevation */
+  --shadow-panel: 0 8px 28px -14px rgba(50, 60, 90, 0.25), 0 1px 3px rgba(50, 60, 90, 0.05);
+  --shadow-drawer: 0 12px 48px rgba(50, 60, 90, 0.18);
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
 
   /* Layout */
   --sidebar-width: 20%;
   --preview-width: 22%;
   --header-height: 52px;
-  --resize-handle-width: 4px;
+  --resize-handle-width: 12px;
 
   /* Spacing */
   --space-xs: 0.25rem;
@@ -40,8 +113,229 @@
   --font-size-xl: 1.5rem;
   --font-size-2xl: 1.75rem;
 
-  /* Motion */
-  --transition-fast: 100ms ease;
-  --transition-base: 150ms ease;
-  --transition-slow: 200ms ease;
+  /* Loading sweep bands (indeterminate progress on buttons) */
+  --sweep-on-accent: rgba(255, 255, 255, 0.45);
+  --sweep-on-surface: rgba(0, 0, 0, 0.08);
+
+  /* Motion — spring-like ease-out for a silky feel */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: 150ms var(--ease-spring);
+  --transition-base: 250ms var(--ease-spring);
+  --transition-slow: 350ms var(--ease-spring);
+}
+
+html[data-theme="blush"] {
+  /* Canvas & surfaces — warm paper */
+  --canvas-bg: #fdf6f4;
+  --color-bg: #faeceb;
+  --color-surface-hover: #fbf1ef;
+  --color-surface-muted: #f8e9e7;
+
+  /* Panels: warm tinted sides, white "note paper" center on the canvas */
+  --panel-bg: #f9eae8;
+  --panel-bg-strong: #ffffff;
+  --panel-blur: none;
+  --panel-border: 1px solid rgba(201, 56, 79, 0.12);
+
+  /* Text — warm ink */
+  --color-text: #3d2f30;
+  --color-text-secondary: #7a6263;
+  --color-text-tertiary: #b09492;
+
+  /* Borders — warm hairlines */
+  --color-border: rgba(184, 80, 90, 0.14);
+  --color-border-subtle: rgba(184, 80, 90, 0.09);
+  --color-border-strong: rgba(184, 80, 90, 0.28);
+
+  /* Accent — crimson */
+  --color-accent: #c9384f;
+  --color-accent-hover: #b02e43;
+  --color-accent-subtle: rgba(201, 56, 79, 0.09);
+
+  /* Primary button — blush gradient pill */
+  --btn-primary-bg: linear-gradient(120deg, #ff5470, #ff2442);
+  --btn-primary-bg-hover: linear-gradient(120deg, #f04763, #e01e3c);
+  --btn-primary-shadow: 0 6px 18px -6px rgba(255, 36, 66, 0.5);
+
+  /* Nav items — white pills */
+  --radius-nav: 999px;
+  --nav-active-color: #c9384f;
+  --nav-active-shadow: 0 2px 8px -2px rgba(201, 56, 79, 0.18);
+
+  /* Cards — note paper with warm edges instead of shadows */
+  --card-border: 1.5px solid #f6dfdd;
+  --card-radius: 16px;
+  --shadow-card: none;
+  --shadow-card-hover: 0 8px 20px -8px rgba(201, 56, 79, 0.22);
+
+  /* Elevation — soft warm lift so panels keep an edge on the paper canvas */
+  --shadow-panel: 0 4px 20px -12px rgba(160, 60, 70, 0.25);
+  --shadow-drawer: 0 12px 48px rgba(120, 50, 60, 0.2);
+}
+
+html[data-theme="ink"] {
+  /* Canvas & surfaces — deep blue-black night */
+  --canvas-bg: linear-gradient(160deg, #14161c 0%, #171a22 60%, #1a1723 100%);
+  --color-bg: #1a1d24;
+  --color-surface: #232732;
+  --color-surface-hover: #2a2f3b;
+  --color-surface-muted: #20242e;
+
+  /* Panels: dim frosted glass, hairline light edge instead of shadow-only */
+  --panel-bg: rgba(30, 33, 42, 0.72);
+  --panel-bg-strong: rgba(35, 39, 50, 0.9);
+  --panel-border: 1px solid rgba(255, 255, 255, 0.07);
+
+  /* Text — soft off-white, never pure white */
+  --color-text: #e8eaf0;
+  --color-text-secondary: #a6acb9;
+  --color-text-tertiary: #6f7684;
+
+  /* Borders — light hairlines on dark */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Accent — brand red brightened for dark backgrounds */
+  --color-accent: #ff4d68;
+  --color-accent-hover: #ff3355;
+  --color-accent-subtle: rgba(255, 77, 104, 0.14);
+  --color-danger: #ff6b6b;
+
+  /* Loading sweep — light band on dark surfaces */
+  --sweep-on-surface: rgba(255, 255, 255, 0.12);
+
+  /* Status messages — lightened for dark surfaces */
+  --status-error-text: #ff8a8a;
+  --status-error-bg: rgba(255, 107, 107, 0.14);
+  --status-success-text: #8fd694;
+  --status-success-bg: rgba(102, 187, 106, 0.14);
+
+  /* Login page — dark scrim over the background image */
+  --login-overlay: linear-gradient(
+    135deg,
+    rgba(12, 14, 20, 0.6) 0%,
+    rgba(16, 18, 26, 0.72) 45%,
+    rgba(12, 14, 20, 0.64) 100%
+  );
+
+  /* Primary button */
+  --btn-primary-shadow: 0 6px 18px -6px rgba(255, 51, 85, 0.45);
+
+  /* Nav items — lifted dark pill-less blocks */
+  --nav-active-bg: #2e3340;
+  --nav-active-color: #f2f4f8;
+  --nav-active-shadow: 0 3px 12px -4px rgba(0, 0, 0, 0.5);
+
+  /* Cards — dark surface with hairline edge; shadows deepen, not lighten */
+  --card-bg: #232732;
+  --card-border: 1px solid rgba(255, 255, 255, 0.06);
+  --shadow-card: 0 2px 10px -4px rgba(0, 0, 0, 0.4);
+  --shadow-card-hover: 0 10px 24px -8px rgba(0, 0, 0, 0.55);
+
+  /* Elevation */
+  --shadow-panel: 0 8px 28px -14px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-drawer: 0 12px 48px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="matcha"] {
+  /* Canvas & surfaces — creamy paper with a green cast */
+  --canvas-bg: linear-gradient(160deg, #f5f7ef 0%, #f2f5ec 60%, #f4f6ee 100%);
+  --color-bg: #eef1e6;
+  --color-surface-hover: #f2f5ea;
+  --color-surface-muted: #edf0e4;
+
+  /* Panels: green-tinted paper sides, white center */
+  --panel-bg: #f0f3e8;
+  --panel-bg-strong: #ffffff;
+  --panel-blur: none;
+  --panel-border: 1px solid rgba(90, 120, 70, 0.12);
+
+  /* Text — mossy ink */
+  --color-text: #2f362c;
+  --color-text-secondary: #67705f;
+  --color-text-tertiary: #9aa392;
+
+  /* Borders — green hairlines */
+  --color-border: rgba(90, 120, 70, 0.14);
+  --color-border-subtle: rgba(90, 120, 70, 0.09);
+  --color-border-strong: rgba(90, 120, 70, 0.28);
+
+  /* Accent — matcha green */
+  --color-accent: #567d4e;
+  --color-accent-hover: #47693f;
+  --color-accent-subtle: rgba(86, 125, 78, 0.1);
+
+  /* Primary button — matcha gradient pill */
+  --btn-primary-bg: linear-gradient(120deg, #74a069, #567d4e);
+  --btn-primary-bg-hover: linear-gradient(120deg, #679459, #47693f);
+  --btn-primary-shadow: 0 6px 18px -6px rgba(86, 125, 78, 0.45);
+
+  /* Nav items — white pills */
+  --radius-nav: 999px;
+  --nav-active-color: #3f5c39;
+  --nav-active-shadow: 0 2px 8px -2px rgba(86, 125, 78, 0.18);
+
+  /* Cards — note paper with green edges instead of shadows */
+  --card-border: 1.5px solid #e2e9d8;
+  --card-radius: 16px;
+  --shadow-card: none;
+  --shadow-card-hover: 0 8px 20px -8px rgba(86, 125, 78, 0.22);
+
+  /* Elevation — soft green lift */
+  --shadow-panel: 0 4px 20px -12px rgba(70, 100, 60, 0.25);
+  --shadow-drawer: 0 12px 48px rgba(60, 90, 50, 0.2);
+}
+
+html[data-theme="cream"] {
+  /* Canvas & surfaces — warm off-white cream */
+  --canvas-bg: linear-gradient(160deg, #faf6f0 0%, #f8f3ea 60%, #faf5ee 100%);
+  --color-bg: #f5eee4;
+  --color-surface: #fffdf9;
+  --color-surface-hover: #f8f2ea;
+  --color-surface-muted: #f3ece1;
+
+  /* Panels: cream sides, near-white center */
+  --panel-bg: #f7f0e6;
+  --panel-bg-strong: #fffdf9;
+  --panel-blur: none;
+  --panel-border: 1px solid rgba(190, 140, 80, 0.12);
+
+  /* Text — warm charcoal */
+  --color-text: #3a332b;
+  --color-text-secondary: #7a6f60;
+  --color-text-tertiary: #b0a493;
+
+  /* Borders — warm hairlines */
+  --color-border: rgba(190, 140, 80, 0.16);
+  --color-border-subtle: rgba(190, 140, 80, 0.1);
+  --color-border-strong: rgba(190, 140, 80, 0.3);
+
+  /* Accent — muted apricot, deep enough for white text */
+  --color-accent: #bd6120;
+  --color-accent-hover: #a55317;
+  --color-accent-subtle: rgba(189, 97, 32, 0.1);
+
+  /* Primary button — apricot gradient, softly rounded (not pill) */
+  --btn-primary-bg: linear-gradient(120deg, #dd8b3f, #bd6120);
+  --btn-primary-bg-hover: linear-gradient(120deg, #cf7d33, #a55317);
+  --btn-primary-shadow: 0 6px 18px -6px rgba(189, 97, 32, 0.4);
+  --radius-control: 10px;
+
+  /* Nav items — soft rounded blocks */
+  --radius-nav: 10px;
+  --nav-active-bg: #fffdf9;
+  --nav-active-color: #a05018;
+  --nav-active-shadow: 0 2px 8px -2px rgba(160, 110, 50, 0.18);
+
+  /* Cards — cream paper, whisper-light shadows */
+  --card-bg: #fffdf9;
+  --card-border: 1.5px solid #f0e2cf;
+  --card-radius: 14px;
+  --shadow-card: 0 2px 8px -4px rgba(160, 110, 50, 0.12);
+  --shadow-card-hover: 0 8px 20px -8px rgba(160, 110, 50, 0.25);
+
+  /* Elevation — warm soft lift */
+  --shadow-panel: 0 4px 20px -12px rgba(150, 100, 50, 0.22);
+  --shadow-drawer: 0 12px 48px rgba(120, 80, 40, 0.18);
 }

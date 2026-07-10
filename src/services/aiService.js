@@ -8,12 +8,12 @@ const DEFAULT_TIMEOUT_MS = 120000;
 
 /**
  * Error with a machine-readable code so routes/UI can react per failure class.
- * Codes: CONNECTION | TIMEOUT | AUTH | HTTP | BAD_RESPONSE | CONFIG
+ * Codes: CONNECTION | TIMEOUT | AUTH | HTTP | BAD_RESPONSE | CONFIG | CANCELLED
  */
 class AiServiceError extends Error {
   /**
    * @param {string} message
-   * @param {"CONNECTION"|"TIMEOUT"|"AUTH"|"HTTP"|"BAD_RESPONSE"|"CONFIG"} code
+   * @param {"CONNECTION"|"TIMEOUT"|"AUTH"|"HTTP"|"BAD_RESPONSE"|"CONFIG"|"CANCELLED"} code
    * @param {{ status?: number; cause?: unknown }} [details]
    */
   constructor(message, code, details = {}) {
@@ -68,6 +68,22 @@ class AiService {
   constructor(getConfig, deps = {}) {
     this.getConfig = getConfig;
     this.fetchImpl = deps.fetchImpl || fetch;
+    /** @type {Set<AbortController & { cancelledByUser?: boolean }>} */
+    this.inflight = new Set();
+  }
+
+  /**
+   * Abort every in-flight request (user-initiated cancel).
+   * @returns {{ cancelled: number }}
+   */
+  cancelInflight() {
+    let cancelled = 0;
+    for (const controller of this.inflight) {
+      controller.cancelledByUser = true;
+      controller.abort();
+      cancelled += 1;
+    }
+    return { cancelled };
   }
 
   /** @returns {{ baseUrl: string; apiKey?: string; model: string }} */
@@ -104,6 +120,7 @@ class AiService {
     const controller = new AbortController();
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    this.inflight.add(controller);
 
     let response;
     try {
@@ -115,6 +132,9 @@ class AiService {
       });
     } catch (error) {
       if (error.name === "AbortError") {
+        if (controller.cancelledByUser) {
+          throw new AiServiceError("已取消", "CANCELLED", { cause: error });
+        }
         throw new AiServiceError(`Request timed out after ${timeoutMs}ms`, "TIMEOUT", {
           cause: error,
         });
@@ -124,6 +144,7 @@ class AiService {
       });
     } finally {
       clearTimeout(timer);
+      this.inflight.delete(controller);
     }
 
     if (response.status === 401 || response.status === 403) {

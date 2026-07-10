@@ -11,7 +11,32 @@ function buildAppMenu(mainWindow) {
   const template = [
     {
       label: "文件",
-      submenu: [{ role: "quit", label: "退出" }],
+      submenu: [
+        {
+          label: "新建创作",
+          accelerator: "CmdOrCtrl+N",
+          click: () => {
+            mainWindow?.webContents.send("app:newWorkspace");
+          },
+        },
+        {
+          label: "导出到文件夹",
+          accelerator: "CmdOrCtrl+E",
+          click: () => {
+            mainWindow?.webContents.send("app:exportPackage");
+          },
+        },
+        { type: "separator" },
+        {
+          label: "设置",
+          accelerator: "CmdOrCtrl+,",
+          click: () => {
+            mainWindow?.webContents.send("app:openSettings");
+          },
+        },
+        { type: "separator" },
+        { role: "quit", label: "退出" },
+      ],
     },
     {
       label: "编辑",
@@ -23,6 +48,14 @@ function buildAppMenu(mainWindow) {
         { role: "copy", label: "复制" },
         { role: "paste", label: "粘贴" },
         { role: "selectAll", label: "全选" },
+        { type: "separator" },
+        {
+          label: "搜索创作",
+          accelerator: "CmdOrCtrl+F",
+          click: () => {
+            mainWindow?.webContents.send("app:focusSearch");
+          },
+        },
       ],
     },
     {

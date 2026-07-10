@@ -227,6 +227,120 @@ class CopyService {
   }
 
   /**
+   * @param {{
+   *   selection: string;
+   *   instruction: string;
+   *   fullText?: string;
+   *   fieldLabel?: string;
+   *   persona?: object | null;
+   * }} payload
+   */
+  buildRewriteSelectionMessages(payload) {
+    const selection = payload.selection ?? "";
+    const instruction = payload.instruction?.trim();
+    if (!selection.trim()) {
+      throw new Error("请先选中要改写的文字");
+    }
+    if (!instruction) {
+      throw new Error("修改指令不能为空");
+    }
+
+    let userContent = this.promptCatalog.renderPrompt("rewrite", "selection-rewrite", {
+      FIELD_LABEL: payload.fieldLabel?.trim() || "正文",
+      FULL_TEXT: payload.fullText?.trim() || "（无更多上下文）",
+      SELECTION: selection,
+      INSTRUCTION: instruction,
+    });
+    userContent = appendPersonaBlock(userContent, payload.persona);
+
+    return [
+      {
+        role: "system",
+        content:
+          "你是 noteGen 的局部改写助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+      },
+      { role: "user", content: userContent },
+    ];
+  }
+
+  /**
+   * Rewrite only the selected fragment per user instruction, in context.
+   * @param {{
+   *   selection: string;
+   *   instruction: string;
+   *   fullText?: string;
+   *   fieldLabel?: string;
+   *   persona?: object | null;
+   * }} payload
+   */
+  async rewriteSelection(payload) {
+    const messages = this.buildRewriteSelectionMessages(payload);
+    const raw = await this.aiService.completeJson(messages, { temperature: 0.7 });
+    if (!raw || typeof raw !== "object") {
+      throw new Error("模型返回的改写结果格式无效");
+    }
+    const replacement = String(/** @type {Record<string, unknown>} */ (raw).replacement || "").trim();
+    if (!replacement) {
+      throw new Error("模型未返回改写结果");
+    }
+    return { replacement };
+  }
+
+  /**
+   * Build messages for generating new text at the caret (<<<>>> marker).
+   * @param {{
+   *   instruction: string;
+   *   fullText?: string;
+   *   fieldLabel?: string;
+   *   persona?: object | null;
+   * }} payload
+   */
+  buildInsertAtCursorMessages(payload) {
+    const instruction = payload.instruction?.trim();
+    if (!instruction) {
+      throw new Error("生成指令不能为空");
+    }
+
+    let userContent = this.promptCatalog.renderPrompt("rewrite", "inline-insert", {
+      FIELD_LABEL: payload.fieldLabel?.trim() || "正文",
+      FULL_TEXT: payload.fullText?.trim() || "（空白内容，光标在 <<<>>> 处）<<<>>>",
+      INSTRUCTION: instruction,
+    });
+    userContent = appendPersonaBlock(userContent, payload.persona);
+
+    return [
+      {
+        role: "system",
+        content:
+          "你是 noteGen 的内容插入助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+      },
+      { role: "user", content: userContent },
+    ];
+  }
+
+  /**
+   * Generate new text to insert at the caret position, in context.
+   * @param {{
+   *   instruction: string;
+   *   fullText?: string;
+   *   fieldLabel?: string;
+   *   persona?: object | null;
+   * }} payload
+   */
+  async insertAtCursor(payload) {
+    const messages = this.buildInsertAtCursorMessages(payload);
+    const raw = await this.aiService.completeJson(messages, { temperature: 0.75 });
+    if (!raw || typeof raw !== "object") {
+      throw new Error("模型返回的生成结果格式无效");
+    }
+    const replacement = String(/** @type {Record<string, unknown>} */ (raw).replacement || "").trim();
+    if (!replacement) {
+      throw new Error("模型未返回生成内容");
+    }
+    return { replacement };
+  }
+
+  /**
    * Continue or complete a single wechat section with optional user draft.
    * @param {{
    *   title?: string;
