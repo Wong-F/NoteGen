@@ -1,5 +1,13 @@
 # 会话进展记录
 
+## 2026-07-17
+
+- **激活接口打通**：排查密钥激活失败，根因是 `SCRIPT_TYPE` 大小写不一致（代码 `NoteGen` vs 后台 `noteGen`），已修正并实测激活成功（code 200）
+- **记住账号密码**（规划：`.planning/20260717_remember_credentials.md`）：
+  - `authService` 新增凭据保存/读取/清除（userData `saved-credentials.json`，阶段一明文，阶段二拟换 safeStorage）
+  - `auth:login` 支持 `remember` 标记；新增 `auth:savedCredentials` 路由；登录页复选框（默认勾选）+ 自动预填
+  - 测试 162/162 通过；`npm run dev` 启动无报错；Codex MCP 仍不可用，Review Gate 以内置自查替代
+
 ## 2026-07-10
 
 - **Ctrl+K 空白处语义修正（F1b）**：用户澄清空白处 Ctrl+K 应为「光标处 AI 生成插入」而非提示。新增 inline-insert prompt + `copyService.insertAtCursor` + `copy:insertAtCursor` 路由；inlineRewrite 双模式（选区=改写 / 无选区=插入），光标失焦保留特性定位插入点；测试 158/158

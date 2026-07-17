@@ -38,6 +38,10 @@ export function mountLoginPage(root, { onSuccess }) {
             autocomplete="current-password"
             placeholder="请输入密钥"
           />
+          <label class="login-remember">
+            <input id="login-remember" type="checkbox" checked />
+            <span>记住账号密码</span>
+          </label>
           <p id="login-error" class="login-error" aria-live="polite" hidden></p>
           <button id="login-submit" type="submit" class="btn-primary login-submit">登录</button>
         </form>
@@ -50,6 +54,18 @@ export function mountLoginPage(root, { onSuccess }) {
   const secretInput = root.querySelector("#login-secret");
   const errorEl = root.querySelector("#login-error");
   const submitBtn = root.querySelector("#login-submit");
+  const rememberInput = root.querySelector("#login-remember");
+
+  window.noteGen
+    .invoke("auth:savedCredentials")
+    .then((saved) => {
+      if (saved?.phone && !phoneInput.value) {
+        phoneInput.value = saved.phone;
+        secretInput.value = saved.secret || "";
+        rememberInput.checked = true;
+      }
+    })
+    .catch(() => {});
 
   function showError(message) {
     if (!message) {
@@ -84,7 +100,11 @@ export function mountLoginPage(root, { onSuccess }) {
     submitBtn.textContent = "登录中…";
 
     try {
-      const result = await window.noteGen.invoke("auth:login", { phone, secret });
+      const result = await window.noteGen.invoke("auth:login", {
+        phone,
+        secret,
+        remember: rememberInput.checked,
+      });
       if (!result.ok) {
         showError(result.error || "登录失败，请稍后重试");
         return;

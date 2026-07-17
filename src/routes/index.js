@@ -31,6 +31,10 @@ function registerRoutes(services) {
     return services.authService.logout();
   });
 
+  ipcMain.handle("auth:savedCredentials", async () => {
+    return services.authService.readSavedCredentials();
+  });
+
   ipcMain.handle("notes:generate", async (_event, payload) => {
     return services.noteService.generate(payload);
   });

@@ -1,5 +1,12 @@
 # 关键发现与技术结论
 
+## 2026-07-17 — 密钥激活平台实测
+
+- **script 字段严格区分大小写**：后台密钥注册类型为 `noteGen`，请求 `NoteGen` 会报「脚本类型错误」。
+- **实际成功响应与文档不符**：`data.aipoint / script / secret` 均为 null，JWT 放在 `msg` 字段里；代码已有兜底（aipoint 记 0），若设置页要展示真实点数需后端确认。
+- **设备绑定靠 `imei`**：测试时用假 imei `TESTDEVICE001` 激活过密钥 `45941b0b…`，导致真实设备登录报「该激活码已在其它设备绑定」，需后端解绑。
+- **后端已知 bug（等待修复）**：imei 过长会出错。本机 imei 为 12 位 MAC（`AABBCCDDEEFF`）理论不受影响，但 UUID 回退路径（36 位）可能踩中；后端修复前暂不改动 `getDeviceId` 逻辑。
+
 ## 2026-07-10 — 桌面交互改进实测发现
 
 - **Windows 关闭过程中 `BrowserWindow.isMaximized()` 返回 false**：在 `close` 事件里重新捕获窗口状态会把最大化误存为 false。结论：状态在 resize/move/maximize/unmaximize 事件时即时捕获，close 只负责落盘（`src/main/windowState.js`）。

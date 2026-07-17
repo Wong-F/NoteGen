@@ -104,7 +104,7 @@ function resolvePhysicalMacAddress(networkInterfaces = os.networkInterfaces()) {
 
 const API_BASE = "http://sit.xslq.work/sit/interface/api";
 const ACTIVATE_PATH = "/publickey/normaltoken";
-const SCRIPT_TYPE = "NoteGen";
+const SCRIPT_TYPE = "noteGen";
 const DEV_BYPASS_PHONE = "13164150732";
 
 /** @type {Record<string, string>} */
@@ -142,6 +142,7 @@ class AuthService {
     this.networkInterfacesFn = options.networkInterfacesFn || os.networkInterfaces;
     this.sessionPath = path.join(userDataDir, "auth-session.json");
     this.deviceIdPath = path.join(userDataDir, "device-id.json");
+    this.credentialsPath = path.join(userDataDir, "saved-credentials.json");
   }
 
   /** @returns {string} Device id sent as API `imei` (physical MAC, AABBCCDDEEFF). */
@@ -299,12 +300,65 @@ class AuthService {
     return { ok: true, session };
   }
 
+  /** @returns {{ phone: string; secret: string } | null} */
+  readSavedCredentials() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.credentialsPath, "utf8"));
+      const phone = String(raw?.phone || "").trim();
+      const secret = String(raw?.secret || "").trim();
+      if (!phone) {
+        return null;
+      }
+      return { phone, secret };
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.warn(`[noteGen] failed to read saved credentials: ${error.message}`);
+      }
+      return null;
+    }
+  }
+
   /**
-   * @param {{ phone: string; secret: string }} payload
+   * @param {string} phone
+   * @param {string} secret
+   */
+  saveCredentials(phone, secret) {
+    fs.mkdirSync(this.userDataDir, { recursive: true });
+    fs.writeFileSync(
+      this.credentialsPath,
+      JSON.stringify(
+        { phone: String(phone || "").trim(), secret: String(secret || "").trim() },
+        null,
+        2
+      ),
+      "utf8"
+    );
+  }
+
+  clearCredentials() {
+    try {
+      fs.unlinkSync(this.credentialsPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.warn(`[noteGen] failed to clear saved credentials: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * @param {{ phone: string; secret: string; remember?: boolean }} payload
    * @returns {Promise<{ ok: true; session: AuthSession } | { ok: false; error: string }>}
    */
   async login(payload) {
-    return this.activate(payload?.phone, payload?.secret);
+    const result = await this.activate(payload?.phone, payload?.secret);
+    if (result.ok && payload && "remember" in payload) {
+      if (payload.remember) {
+        this.saveCredentials(payload.phone, payload.secret);
+      } else {
+        this.clearCredentials();
+      }
+    }
+    return result;
   }
 
   /**

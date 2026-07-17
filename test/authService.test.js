@@ -216,6 +216,58 @@ describe("AuthService", () => {
     assert.equal(service.readStoredSession(), null);
   });
 
+  it("saves, reads, and clears remembered credentials", () => {
+    const service = new AuthService(makeTmpDir());
+    assert.equal(service.readSavedCredentials(), null);
+
+    service.saveCredentials(" 13800000000 ", " secret-x ");
+    assert.deepEqual(service.readSavedCredentials(), {
+      phone: "13800000000",
+      secret: "secret-x",
+    });
+
+    service.clearCredentials();
+    assert.equal(service.readSavedCredentials(), null);
+    service.clearCredentials();
+  });
+
+  it("returns null for corrupt saved credentials file", () => {
+    const dir = makeTmpDir();
+    const service = new AuthService(dir);
+    fs.writeFileSync(service.credentialsPath, "not json", "utf8");
+    assert.equal(service.readSavedCredentials(), null);
+  });
+
+  it("login with remember=true persists credentials, remember=false clears them", async () => {
+    const service = new AuthService(makeTmpDir(), { isDev: true });
+
+    await service.login({ phone: DEV_BYPASS_PHONE, secret: "s1", remember: true });
+    assert.deepEqual(service.readSavedCredentials(), {
+      phone: DEV_BYPASS_PHONE,
+      secret: "s1",
+    });
+
+    await service.login({ phone: DEV_BYPASS_PHONE, secret: "s1", remember: false });
+    assert.equal(service.readSavedCredentials(), null);
+  });
+
+  it("failed login does not touch saved credentials", async () => {
+    const service = new AuthService(makeTmpDir(), {
+      isDev: false,
+      fetchFn: async () => ({
+        json: async () => ({ code: 500, msg: "密钥非法", data: null }),
+      }),
+    });
+    service.saveCredentials("13800000009", "old-secret");
+
+    const result = await service.login({ phone: "13800000009", secret: "bad", remember: true });
+    assert.equal(result.ok, false);
+    assert.deepEqual(service.readSavedCredentials(), {
+      phone: "13800000009",
+      secret: "old-secret",
+    });
+  });
+
   it("builds user profile from session", () => {
     const service = new AuthService(makeTmpDir());
     const profile = service.toUserProfile({
