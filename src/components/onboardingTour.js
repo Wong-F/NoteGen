@@ -246,7 +246,7 @@ function getWelcomeSteps() {
     {
       selector: "#settings-toggle",
       title: "设置",
-      body: "在这里配置 AI 文案与图像 API Key，连接本地 Ollama 或云端模型。",
+      body: "在这里配置 AI 文案与图像 API Key。默认对接 DeepSeek；也可改用 Agnes（www.agnes-ai.cn，永久免费）或其他 OpenAI 兼容服务。填好后点「测试文案连接」，即可从发现的模型中选用。",
       placement: "top",
     },
   ];

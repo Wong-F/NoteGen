@@ -8,9 +8,9 @@ const path = require("node:path");
 
 const DEFAULT_SETTINGS = Object.freeze({
   ai: Object.freeze({
-    baseUrl: "http://localhost:11434/v1",
+    baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "",
+    model: "deepseek-v4-flash",
   }),
   image: Object.freeze({
     baseUrl: "",

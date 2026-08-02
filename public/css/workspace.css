@@ -32,6 +32,22 @@ body.is-resizing {
   flex-shrink: 0;
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-logo-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: #fff5f6;
+}
+
 .header-logo {
   margin: 0;
   font-size: var(--font-size-base);
@@ -1908,6 +1924,13 @@ button.is-loading::after {
   color: var(--color-text-secondary);
 }
 
+.settings-help-text code {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted, #f3f4f6);
+  font-size: var(--font-size-xs);
+}
+
 .settings-help-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1936,6 +1959,44 @@ button.is-loading::after {
 
 .settings-group input:focus {
   border-color: var(--color-border-strong);
+}
+
+.settings-model-picker {
+  margin: calc(var(--space-md) * -0.5) 0 var(--space-md);
+}
+
+.settings-model-picker-label {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.settings-model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.settings-model-chip {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.settings-model-chip:hover {
+  border-color: var(--color-border-strong);
+}
+
+.settings-model-chip.is-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
 }
 
 .settings-actions {

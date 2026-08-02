@@ -1,9 +1,9 @@
 {
   "name": "notegen",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "Windows desktop app for AI-assisted note creation on Xiaohongshu and similar platforms",
   "main": "src/main/index.js",
-  "author": "Wong-F",
+  "author": "科潮智能",
   "license": "MIT",
   "scripts": {
     "dev": "electron .",
@@ -18,7 +18,8 @@
   },
   "build": {
     "appId": "com.wongf.notegen",
-    "productName": "noteGen",
+    "productName": "AI笔记坊",
+    "copyright": "Copyright © 科潮智能",
     "directories": {
       "output": "release"
     },
@@ -31,9 +32,18 @@
       "package.json"
     ],
     "win": {
+      "icon": "public/assets/icon.ico",
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI笔记坊"
     }
   }
 }

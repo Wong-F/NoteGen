@@ -57,7 +57,7 @@ class CardService {
       {
         role: "system",
         content:
-          "你是 noteGen 的配图策划助手。严格按用户消息中的 JSON 格式输出，只返回 JSON。",
+          "你是 AI笔记坊 的配图策划助手。严格按用户消息中的 JSON 格式输出，只返回 JSON。",
       },
       { role: "user", content: userContent },
     ];

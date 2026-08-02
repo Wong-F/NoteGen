@@ -33,7 +33,7 @@ function buildPosterSection(page, index, options = {}) {
       ${page.subline ? `<p class="subline">${escapeHtml(page.subline)}</p>` : ""}
       ${page.body ? `<div class="body">${escapeHtml(page.body)}</div>` : ""}
       <div class="foot">
-        <span>noteGen</span>
+        <span>AI笔记坊</span>
         <span>${vol}</span>
       </div>
     </section>

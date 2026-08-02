@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("noteGen", {
-  version: "0.1.0",
+  version: "1.0.1",
   invoke: (channel, payload) => ipcRenderer.invoke(channel, payload),
   onMenuAction: (channel, callback) => {
     const handler = (_event, payload) => callback(payload);

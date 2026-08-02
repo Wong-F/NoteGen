@@ -106,13 +106,13 @@ function buildAppMenu(mainWindow) {
         },
         { type: "separator" },
         {
-          label: "关于 笔记坊",
+          label: "关于 AI笔记坊",
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: "info",
-              title: "关于 笔记坊",
-              message: "笔记坊",
-              detail: `版本 ${app.getVersion()}\n\n随时随地，AI 助力\n\n帮助博主完成选题、文案、配图与导出，支持小红书、微信公众号等平台。`,
+              title: "关于 AI笔记坊",
+              message: "AI笔记坊",
+              detail: `版本 ${app.getVersion()}\n发布者：科潮智能\n\n随时随地，AI 助力\n\n帮助博主完成选题、文案、配图与导出，支持小红书、微信公众号等平台。`,
               buttons: ["确定"],
             });
           },

@@ -169,7 +169,7 @@ async function handleExportAll(exportBtn, statusEl) {
         }),
       {
         success: { title: "导出完成", body: "文案与图片已保存到所选文件夹" },
-        failure: { title: "导出失败", body: "回到笔记坊查看失败原因" },
+        failure: { title: "导出失败", body: "回到AI笔记坊查看失败原因" },
       }
     );
 

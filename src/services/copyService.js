@@ -59,7 +59,7 @@ class CopyService {
       {
         role: "system",
         content:
-          "你是 noteGen 的文案助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的文案助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];
@@ -118,7 +118,7 @@ class CopyService {
         {
           role: "system",
           content:
-            "你是 noteGen 的去 AI 味助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+            "你是 AI笔记坊 的去 AI 味助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
         },
         { role: "user", content: userContent },
       ];
@@ -139,7 +139,7 @@ class CopyService {
       {
         role: "system",
         content:
-          "你是 noteGen 的去 AI 味助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的去 AI 味助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];
@@ -220,7 +220,7 @@ class CopyService {
       {
         role: "system",
         content:
-          "你是 noteGen 的公众号小节续写助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的公众号小节续写助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];
@@ -257,7 +257,7 @@ class CopyService {
       {
         role: "system",
         content:
-          "你是 noteGen 的局部改写助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的局部改写助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];
@@ -312,7 +312,7 @@ class CopyService {
       {
         role: "system",
         content:
-          "你是 noteGen 的内容插入助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的内容插入助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];

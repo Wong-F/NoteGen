@@ -1,7 +1,7 @@
 /**
  * OpenAI-compatible chat completion client.
- * Phase 1 targets a local Ollama endpoint (http://localhost:11434/v1);
- * Phase 2 swaps baseUrl/apiKey to a user-provided cloud provider without code changes.
+ * Defaults point at DeepSeek's cloud API (https://api.deepseek.com/v1);
+ * baseUrl/apiKey/model can be swapped to any OpenAI-compatible provider without code changes.
  */
 
 const DEFAULT_TIMEOUT_MS = 120000;

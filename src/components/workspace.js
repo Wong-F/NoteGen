@@ -525,8 +525,8 @@ function bindIdeaEvents(root) {
             ...workspacePipelinePayload(),
           }),
         {
-          success: { title: "选题已生成", body: "回到笔记坊挑选一个方向继续创作" },
-          failure: { title: "选题生成失败", body: "回到笔记坊查看失败原因" },
+          success: { title: "选题已生成", body: "回到AI笔记坊挑选一个方向继续创作" },
+          failure: { title: "选题生成失败", body: "回到AI笔记坊查看失败原因" },
         }
       );
 
@@ -770,8 +770,8 @@ function bindWritingEvents(root) {
             ...workspacePipelinePayload(),
           }),
         {
-          success: { title: "文案已生成", body: "回到笔记坊查看并编辑文案" },
-          failure: { title: "文案生成失败", body: "回到笔记坊查看失败原因" },
+          success: { title: "文案已生成", body: "回到AI笔记坊查看并编辑文案" },
+          failure: { title: "文案生成失败", body: "回到AI笔记坊查看失败原因" },
         }
       );
       appState.styleId = styleSelect.value;
@@ -1025,8 +1025,8 @@ function bindImagesEvents(root) {
               pageAssets,
             }),
           {
-            success: { title: "卡片已渲染", body: "回到笔记坊查看生成的卡片" },
-            failure: { title: "卡片渲染失败", body: "回到笔记坊查看失败原因" },
+            success: { title: "卡片已渲染", body: "回到AI笔记坊查看生成的卡片" },
+            failure: { title: "卡片渲染失败", body: "回到AI笔记坊查看失败原因" },
           }
         );
         appState.sessionId = result.sessionId;
@@ -1587,8 +1587,8 @@ async function handleAiImage(pageId, planList, statusEl) {
           count,
         }),
       {
-        success: { title: "AI 生图完成", body: "回到笔记坊查看生成的配图" },
-        failure: { title: "AI 生图失败", body: "回到笔记坊查看失败原因" },
+        success: { title: "AI 生图完成", body: "回到AI笔记坊查看生成的配图" },
+        failure: { title: "AI 生图失败", body: "回到AI笔记坊查看失败原因" },
       }
     );
     appState.sessionId = result.sessionId;

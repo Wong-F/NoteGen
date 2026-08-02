@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AI�J">
+  <!-- Soft rounded tile -->
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#fff5f6"/>
+  <!-- Pen body -->
+  <path
+    d="M22 46 L36 18 L42 21 L28 49 Z"
+    fill="#ff2442"
+  />
+  <!-- Pen tip -->
+  <path d="M22 46 L18 50 L26 48 Z" fill="#c91a33"/>
+  <!-- Ink highlight -->
+  <path d="M34.5 21.5 L38.5 23.2 L27.5 45.5 L23.8 43.8 Z" fill="#ff6b7f" opacity="0.55"/>
+  <!-- AI sparks -->
+  <path d="M44 14 L45.6 18.4 L50 20 L45.6 21.6 L44 26 L42.4 21.6 L38 20 L42.4 18.4 Z" fill="#ff2442"/>
+  <path d="M52 28 L52.9 30.2 L55 31 L52.9 31.8 L52 34 L51.1 31.8 L49 31 L51.1 30.2 Z" fill="#ff8a3d"/>
+  <path d="M48 36 L48.6 37.6 L50 38 L48.6 38.4 L48 40 L47.4 38.4 L46 38 L47.4 37.6 Z" fill="#ff2442"/>
+</svg>

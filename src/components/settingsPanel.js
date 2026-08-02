@@ -1,6 +1,7 @@
 import { replayWelcomeTour } from "./onboardingTour.js";
 import { THEMES, getStoredTheme, setTheme } from "./theme.js";
 import { bindOverlayA11y } from "./overlayFocus.js";
+import { escapeHtml, escapeAttr } from "./utils.js";
 
 /**
  * Mount settings drawer (triggered from sidebar user bar).
@@ -56,12 +57,20 @@ export function mountSettingsPanel(root, options = {}) {
         </section>
         <section class="settings-group">
           <h3 class="settings-group-title">AI 文案服务</h3>
+          <p class="settings-help-text">
+            默认对接 DeepSeek（
+            <a href="https://platform.deepseek.com" target="_blank" rel="noopener">platform.deepseek.com</a>
+            ）。想白嫖可用 Agnes（永久免费）：
+            <a href="https://www.agnes-ai.cn/" target="_blank" rel="noopener">www.agnes-ai.cn</a>
+            ，服务地址填 <code>https://api.agnes-ai.cn/v1</code>。填好后点「测试文案连接」即可从列表中选用模型；其他 OpenAI 兼容服务商同理，详见使用手册。
+          </p>
           <label for="ai-base-url">服务地址</label>
-          <input id="ai-base-url" type="text" placeholder="http://localhost:11434/v1" />
+          <input id="ai-base-url" type="text" placeholder="https://api.deepseek.com/v1" />
           <label for="ai-model">模型</label>
           <input id="ai-model" type="text" list="ai-model-options"
-            placeholder="测试连接后可从列表选择" />
+            placeholder="deepseek-v4-flash" autocomplete="off" />
           <datalist id="ai-model-options"></datalist>
+          <div id="ai-model-picker" class="settings-model-picker" hidden></div>
           <label for="ai-api-key">API Key（本地 Ollama 可留空）</label>
           <input id="ai-api-key" type="password" placeholder="sk-..." />
         </section>
@@ -76,6 +85,13 @@ export function mountSettingsPanel(root, options = {}) {
         </section>
         <section class="settings-group">
           <h3 class="settings-group-title">图库 API</h3>
+          <p class="settings-help-text">
+            用于配图步骤的「图库搜图」，至少配置一家即可。Pexels：
+            <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>
+            ；Unsplash：
+            <a href="https://unsplash.com/developers" target="_blank" rel="noopener">unsplash.com/developers</a>
+            （填 Access Key）。填好后点「测试图库连接」，详见使用手册。
+          </p>
           <label for="pexels-api-key">Pexels API Key</label>
           <input id="pexels-api-key" type="password" placeholder="pexels.com/api" />
           <label for="unsplash-access-key">Unsplash Access Key</label>
@@ -83,6 +99,7 @@ export function mountSettingsPanel(root, options = {}) {
         </section>
         <div class="settings-actions">
           <button id="ai-test-btn" type="button" class="btn-secondary">测试文案连接</button>
+          <button id="image-test-btn" type="button" class="btn-secondary">测试图像连接</button>
           <button id="stock-test-btn" type="button" class="btn-secondary">测试图库连接</button>
           <button id="settings-save-btn" type="button" class="btn-primary">保存</button>
         </div>
@@ -100,14 +117,96 @@ export function mountSettingsPanel(root, options = {}) {
   const baseUrlInput = overlay.querySelector("#ai-base-url");
   const modelInput = overlay.querySelector("#ai-model");
   const modelOptions = overlay.querySelector("#ai-model-options");
+  const modelPicker = overlay.querySelector("#ai-model-picker");
   const apiKeyInput = overlay.querySelector("#ai-api-key");
   const testBtn = overlay.querySelector("#ai-test-btn");
+  const imageTestBtn = overlay.querySelector("#image-test-btn");
   const stockTestBtn = overlay.querySelector("#stock-test-btn");
   const saveBtn = overlay.querySelector("#settings-save-btn");
   const replayTourBtn = overlay.querySelector("#settings-replay-tour-btn");
   const openManualBtn = overlay.querySelector("#settings-open-manual-btn");
   const statusEl = overlay.querySelector("#settings-status");
   const themeButtons = [...overlay.querySelectorAll(".theme-option")];
+
+  /** @type {string[]} */
+  let discoveredModels = [];
+  /** @type {string | null} */
+  let modelValueBeforeFocus = null;
+
+  /**
+   * Chromium filters <datalist> by the current input value, so a filled model
+   * field only shows 1 matching option. Clear on focus to reveal the full list.
+   */
+  modelInput.addEventListener("focus", () => {
+    if (modelOptions.children.length === 0) {
+      return;
+    }
+    modelValueBeforeFocus = modelInput.value;
+    modelInput.value = "";
+  });
+
+  modelInput.addEventListener("blur", () => {
+    if (modelValueBeforeFocus != null && !modelInput.value.trim()) {
+      modelInput.value = modelValueBeforeFocus;
+    }
+    modelValueBeforeFocus = null;
+    syncModelPickerActive();
+  });
+
+  modelInput.addEventListener("input", () => {
+    syncModelPickerActive();
+  });
+
+  modelPicker.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-model-id]");
+    if (!(chip instanceof HTMLElement)) {
+      return;
+    }
+    const modelId = chip.dataset.modelId || "";
+    if (!modelId) {
+      return;
+    }
+    modelInput.value = modelId;
+    modelValueBeforeFocus = null;
+    syncModelPickerActive();
+  });
+
+  /**
+   * @param {string[]} models
+   */
+  function renderDiscoveredModels(models) {
+    discoveredModels = models.filter((id) => typeof id === "string" && id.trim());
+    modelOptions.innerHTML = discoveredModels
+      .map((id) => `<option value="${escapeAttr(id)}"></option>`)
+      .join("");
+
+    if (discoveredModels.length === 0) {
+      modelPicker.hidden = true;
+      modelPicker.innerHTML = "";
+      return;
+    }
+
+    modelPicker.hidden = false;
+    modelPicker.innerHTML = `
+      <p class="settings-model-picker-label">已发现模型（点击选用）</p>
+      <div class="settings-model-chips">
+        ${discoveredModels
+          .map(
+            (id) =>
+              `<button type="button" class="settings-model-chip" data-model-id="${escapeAttr(id)}">${escapeHtml(id)}</button>`
+          )
+          .join("")}
+      </div>
+    `;
+    syncModelPickerActive();
+  }
+
+  function syncModelPickerActive() {
+    const current = modelInput.value.trim();
+    for (const chip of modelPicker.querySelectorAll("[data-model-id]")) {
+      chip.classList.toggle("is-active", chip.dataset.modelId === current);
+    }
+  }
 
   function renderThemeButtons(activeId) {
     for (const btn of themeButtons) {
@@ -243,17 +342,30 @@ export function mountSettingsPanel(root, options = {}) {
       await window.noteGen.invoke("settings:save", collectSettings());
       const result = await window.noteGen.invoke("ai:testConnection");
       if (result.ok) {
-        modelOptions.innerHTML = result.models
-          .map((id) => `<option value="${id}"></option>`)
-          .join("");
-        statusEl.textContent = result.models.length
-          ? `连接成功，发现 ${result.models.length} 个模型`
+        renderDiscoveredModels(result.models || []);
+        statusEl.textContent = discoveredModels.length
+          ? `连接成功，发现 ${discoveredModels.length} 个模型`
           : "连接成功，但无可用模型";
       } else {
         statusEl.textContent = `连接失败（${result.code}）：${result.message}`;
       }
     } catch (error) {
       statusEl.textContent = `连接失败：${error.message}`;
+    }
+  });
+
+  imageTestBtn.addEventListener("click", async () => {
+    statusEl.textContent = "图像 API 连接测试中（会发起一次最小生图请求）…";
+    try {
+      await window.noteGen.invoke("settings:save", collectSettings());
+      const result = await window.noteGen.invoke("image:testConnection");
+      if (result.ok) {
+        statusEl.textContent = `图像 API 连接成功（模型：${result.model}）`;
+      } else {
+        statusEl.textContent = `图像 API 连接失败（${result.code}）：${result.message}`;
+      }
+    } catch (error) {
+      statusEl.textContent = `图像 API 连接失败：${error.message}`;
     }
   });
 

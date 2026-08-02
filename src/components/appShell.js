@@ -34,7 +34,9 @@ export function mountApp(root, options = {}) {
 
       <div class="header-brand">
 
-        <h1 class="header-logo">笔记坊</h1>
+        <img class="header-logo-mark" src="assets/logo.png" alt="" width="28" height="28" />
+
+        <h1 class="header-logo">AI笔记坊</h1>
 
       </div>
 
@@ -47,6 +49,7 @@ export function mountApp(root, options = {}) {
 
 
   const sidebarRoot = document.createElement("div");
+  sidebarRoot.className = "layout-panel-slot";
 
   const centerRoot = document.createElement("div");
 

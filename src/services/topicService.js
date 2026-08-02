@@ -69,7 +69,7 @@ class TopicService {
       {
         role: "system",
         content:
-          "你是 noteGen 的选题助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
+          "你是 AI笔记坊 的选题助手。严格按用户消息中的 JSON 格式要求输出，只返回 JSON，不要其他文字。",
       },
       { role: "user", content: userContent },
     ];

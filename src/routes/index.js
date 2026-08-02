@@ -35,6 +35,14 @@ function registerRoutes(services) {
     return services.authService.readSavedCredentials();
   });
 
+  ipcMain.handle("auth:trialStatus", async () => {
+    return services.authService.getTrialStatus();
+  });
+
+  ipcMain.handle("auth:startTrial", async () => {
+    return services.authService.startTrial();
+  });
+
   ipcMain.handle("notes:generate", async (_event, payload) => {
     return services.noteService.generate(payload);
   });
@@ -49,6 +57,10 @@ function registerRoutes(services) {
 
   ipcMain.handle("ai:testConnection", async () => {
     return services.aiService.testConnection();
+  });
+
+  ipcMain.handle("image:testConnection", async () => {
+    return services.imageService.testConnection();
   });
 
   ipcMain.handle("ai:cancel", async () => {

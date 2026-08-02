@@ -33,7 +33,7 @@ describe("ExportService", () => {
       copy: { title: "自由创作" },
       date: new Date("2026-07-05T10:00:00.000Z"),
     });
-    assert.match(name, /^noteGen_20260705_自由创作$/);
+    assert.match(name, /^AI笔记坊_20260705_自由创作$/);
   });
 
   it("sanitizeFolderSegment removes invalid path characters", () => {

@@ -91,24 +91,29 @@ class ImageService {
     const count = clampImageCount(payload.count);
     const config = this.resolveImageConfig();
     if (!config.baseUrl) {
-      throw new AiServiceError("图像 API 地址未配置", "CONFIG");
+      throw new AiServiceError("Image API endpoint is not configured", "CONFIG");
+    }
+    if (!config.apiKey) {
+      throw new AiServiceError("Image API key is not configured", "CONFIG");
     }
     if (!config.model) {
-      throw new AiServiceError("图像模型未配置", "CONFIG");
+      throw new AiServiceError("Image model is not configured", "CONFIG");
     }
 
     const url = `${config.baseUrl}/images/generations`;
-    const headers = { "Content-Type": "application/json" };
-    if (config.apiKey) {
-      headers.Authorization = `Bearer ${config.apiKey}`;
-    }
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    };
 
+    // Do not send top-level response_format: Agnes (and some gateways) reject it
+    // with 400 UnsupportedParamsError. OpenAI defaults to url; we already handle
+    // both data[].url and data[].b64_json in the response.
     const body = {
       model: config.model,
       prompt,
       n: count,
       size: payload.size || "1024x1024",
-      response_format: "b64_json",
     };
 
     let response;
@@ -192,6 +197,77 @@ class ImageService {
       relativePath: result.images[0].relativePath,
       prompt: result.prompt,
     };
+  }
+
+  /**
+   * Non-throwing connectivity probe for the settings UI.
+   * Sends a minimal /images/generations request and does not write draft files.
+   * @returns {Promise<{ ok: boolean; model?: string; code?: string; message?: string }>}
+   */
+  async testConnection() {
+    const config = this.resolveImageConfig();
+    if (!config.baseUrl) {
+      return { ok: false, code: "CONFIG", message: "图像 API 服务地址未配置" };
+    }
+    if (!config.apiKey) {
+      return { ok: false, code: "CONFIG", message: "图像 API Key 未配置" };
+    }
+    if (!config.model) {
+      return { ok: false, code: "CONFIG", message: "图像模型未配置" };
+    }
+
+    const url = `${config.baseUrl}/images/generations`;
+    let response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          prompt: "connection test",
+          n: 1,
+          size: "1024x1024",
+        }),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        code: "CONNECTION",
+        message: `无法连接图像 API：${url}`,
+      };
+    }
+
+    if (response.status === 401) {
+      return { ok: false, code: "AUTH", message: "图像 API 拒绝了 API Key" };
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return {
+        ok: false,
+        code: "HTTP",
+        message: `图像 API 返回 HTTP ${response.status}: ${text.slice(0, 300)}`,
+      };
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      return { ok: false, code: "BAD_RESPONSE", message: "图像 API 返回了非 JSON 响应" };
+    }
+
+    const items = Array.isArray(data?.data) ? data.data : [];
+    const first = items[0];
+    const hasImage = Boolean(first?.b64_json || first?.url);
+    if (!hasImage) {
+      return { ok: false, code: "BAD_RESPONSE", message: "图像 API 未返回可用图片数据" };
+    }
+
+    return { ok: true, model: config.model };
   }
 }
 

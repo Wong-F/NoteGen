@@ -7,7 +7,9 @@ const {
   AuthService,
   DEV_BYPASS_PHONE,
   SCRIPT_TYPE,
+  TRIAL_PHONE_LABEL,
   resolvePhysicalMacAddress,
+  hashDeviceId,
 } = require("../src/services/authService");
 
 const MOCK_INTERFACES = {
@@ -52,20 +54,49 @@ after(() => {
 });
 
 describe("AuthService", () => {
-  it("persists a stable device id from physical MAC", () => {
+  it("persists a stable, hashed device id derived from the physical MAC", () => {
     const dir = makeTmpDir();
     const service = new AuthService(dir, {
       networkInterfacesFn: () => MOCK_INTERFACES,
     });
     const first = service.getDeviceId();
     const second = service.getDeviceId();
-    assert.equal(first, "AABBCCDDEEFF");
+    assert.equal(first, hashDeviceId("AABBCCDDEEFF"));
+    assert.notEqual(first, "AABBCCDDEEFF");
     assert.equal(first, second);
+
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, "device-id.json"), "utf8"));
+    assert.equal(onDisk.id, first);
   });
 
   it("prefers Ethernet MAC over Wi-Fi and skips virtual adapters", () => {
     const mac = resolvePhysicalMacAddress(MOCK_INTERFACES);
     assert.equal(mac, "AABBCCDDEEFF");
+  });
+
+  it("hashDeviceId is deterministic and produces a 16-hex-char digest", () => {
+    assert.equal(hashDeviceId("AABBCCDDEEFF"), hashDeviceId("AABBCCDDEEFF"));
+    assert.notEqual(hashDeviceId("AABBCCDDEEFF"), hashDeviceId("112233445566"));
+    assert.match(hashDeviceId("AABBCCDDEEFF"), /^[0-9a-f]{16}$/);
+  });
+
+  it("discards a legacy plaintext device-id.json and rewrites it as a hash", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "device-id.json"),
+      JSON.stringify({ id: "AABBCCDDEEFF" }),
+      "utf8"
+    );
+
+    const service = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    const id = service.getDeviceId();
+    assert.equal(id, hashDeviceId("AABBCCDDEEFF"));
+
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, "device-id.json"), "utf8"));
+    assert.equal(onDisk.id, id);
   });
 
   it("maps backend error messages to user-friendly text", () => {
@@ -105,6 +136,7 @@ describe("AuthService", () => {
       fetchFn: async (_url, init) => {
         const body = JSON.parse(init.body);
         assert.equal(body.script, SCRIPT_TYPE);
+        assert.match(body.imei, /^[0-9a-f]{16}$/);
         return {
           json: async () => ({
             code: 200,
@@ -266,6 +298,106 @@ describe("AuthService", () => {
       phone: "13800000009",
       secret: "old-secret",
     });
+  });
+
+  it("starts a trial once and keeps the session in memory only", async () => {
+    const dir = makeTmpDir();
+    const service = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+
+    assert.deepEqual(service.getTrialStatus(), { available: true });
+
+    const result = service.startTrial();
+    assert.equal(result.ok, true);
+    assert.equal(result.session.trial, true);
+    assert.equal(result.session.phone, TRIAL_PHONE_LABEL);
+
+    // Trial session must not be persisted as a normal auth session.
+    assert.equal(service.readStoredSession(), null);
+    assert.equal(fs.existsSync(path.join(dir, "auth-session.json")), false);
+
+    // But the one-time flag must be on disk.
+    const trialState = JSON.parse(fs.readFileSync(path.join(dir, "trial-state.json"), "utf8"));
+    assert.ok(trialState.trialUsedAt);
+    assert.deepEqual(service.getTrialStatus(), { available: false });
+
+    const sessionResult = await service.getSession();
+    assert.equal(sessionResult.session?.trial, true);
+  });
+
+  it("rejects a second trial, including after restart", () => {
+    const dir = makeTmpDir();
+    const service = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    assert.equal(service.startTrial().ok, true);
+
+    const again = service.startTrial();
+    assert.equal(again.ok, false);
+    assert.match(again.error, /试用机会已使用/);
+
+    // Simulate app restart: a fresh instance reads the persisted flag.
+    const restarted = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    assert.deepEqual(restarted.getTrialStatus(), { available: false });
+    assert.equal(restarted.startTrial().ok, false);
+  });
+
+  it("logout ends the trial session", async () => {
+    const service = new AuthService(makeTmpDir(), {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    service.startTrial();
+
+    service.logout();
+    const result = await service.getSession();
+    assert.equal(result.session, null);
+    assert.equal(service.startTrial().ok, false);
+  });
+
+  it("a successful key login supersedes an active trial session", async () => {
+    const service = new AuthService(makeTmpDir(), {
+      isDev: true,
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    service.startTrial();
+
+    const login = await service.login({ phone: DEV_BYPASS_PHONE, secret: "s1" });
+    assert.equal(login.ok, true);
+
+    const result = await service.getSession();
+    assert.equal(result.session?.trial, undefined);
+    assert.equal(result.session?.phone, DEV_BYPASS_PHONE);
+  });
+
+  it("does not enter trial state when the used-flag cannot be persisted", async () => {
+    const dir = makeTmpDir();
+    const service = new AuthService(dir, {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    // A directory at the flag path makes writeFileSync throw.
+    fs.mkdirSync(service.trialStatePath, { recursive: true });
+
+    const result = service.startTrial();
+    assert.equal(result.ok, false);
+
+    const sessionResult = await service.getSession();
+    assert.equal(sessionResult.session, null);
+  });
+
+  it("builds a trial profile with trial labels", () => {
+    const service = new AuthService(makeTmpDir(), {
+      networkInterfacesFn: () => MOCK_INTERFACES,
+    });
+    const { session } = service.startTrial();
+    const profile = service.toUserProfile(session);
+
+    assert.equal(profile.trial, true);
+    assert.equal(profile.subscriptionStatus, "active");
+    assert.equal(profile.subscriptionLabel, "试用中");
+    assert.equal(profile.phone, TRIAL_PHONE_LABEL);
   });
 
   it("builds user profile from session", () => {

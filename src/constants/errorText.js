@@ -28,6 +28,12 @@ export function describeAiError(error) {
     error && typeof error === "object" && "message" in error ? String(error.message) : String(error)
   );
 
+  if (/Image API (endpoint|key) is not configured|Image model is not configured|图像 API .+未配置|图像模型未配置/i.test(message)) {
+    return {
+      text: "尚未配置图像 API，请先在设置中填写服务地址与 API Key",
+      action: "settings",
+    };
+  }
   if (/is not configured/i.test(message)) {
     return { text: "尚未配置 AI 服务，请先在设置中填写服务地址与模型", action: "settings" };
   }
@@ -36,6 +42,9 @@ export function describeAiError(error) {
   }
   if (/Cannot reach AI endpoint/i.test(message)) {
     return { text: "无法连接 AI 服务，请检查设置中的服务地址与网络", action: "settings" };
+  }
+  if (/无法连接图像 API/i.test(message)) {
+    return { text: "无法连接图像 API，请检查设置中的服务地址与网络", action: "settings" };
   }
   if (/timed out/i.test(message)) {
     return { text: "AI 响应超时，可稍后重试或换用更快的模型" };

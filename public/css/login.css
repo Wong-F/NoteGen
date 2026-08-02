@@ -47,6 +47,16 @@
   text-align: center;
 }
 
+.login-logo-mark {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--space-sm);
+  border-radius: 14px;
+  object-fit: cover;
+  background: #fff5f6;
+}
+
 .login-logo {
   margin: 0;
   font-size: var(--font-size-2xl);
@@ -115,6 +125,53 @@
   margin-top: var(--space-md);
   padding: 0.75rem;
   font-size: var(--font-size-base);
+}
+
+.login-trial {
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: 0.7rem;
+  font: inherit;
+  font-size: var(--font-size-base);
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.login-trial:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
+}
+
+.login-trial:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-help {
+  margin: var(--space-md) 0 0;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.login-help-link {
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.login-help-link:hover {
+  opacity: 0.8;
 }
 
 .settings-account-card {

@@ -49,7 +49,7 @@ class ExportService {
     if (meta.persona?.name) {
       return `${sanitizeFolderSegment(meta.persona.name, 24)}_${dateStr}_${titlePart}`;
     }
-    return `noteGen_${dateStr}_${titlePart}`;
+    return `AI笔记坊_${dateStr}_${titlePart}`;
   }
 
   /**

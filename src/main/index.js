@@ -41,7 +41,8 @@ function createWindow() {
     height: windowState.state.height,
     minWidth: 900,
     minHeight: 600,
-    title: "笔记坊",
+    title: "AI笔记坊",
+    icon: path.join(__dirname, "../../public/assets/icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,

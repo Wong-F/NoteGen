@@ -1,3 +1,18 @@
+import { mountUserManual } from "./userManual.js";
+
+/**
+ * Manual overlay is appended to document.body, so keep a single instance even
+ * when the login page is re-mounted after logout.
+ */
+let manualInstance = null;
+
+function getManual(root) {
+  if (!manualInstance) {
+    manualInstance = mountUserManual(root);
+  }
+  return manualInstance;
+}
+
 /**
  * Full-screen login page for key activation.
  * @param {HTMLElement} root
@@ -16,7 +31,8 @@ export function mountLoginPage(root, { onSuccess }) {
       <div class="login-page-overlay" aria-hidden="true"></div>
       <div class="login-card">
         <div class="login-brand">
-          <h1 class="login-logo">笔记坊</h1>
+          <img class="login-logo-mark" src="assets/logo.png" alt="" width="56" height="56" />
+          <h1 class="login-logo">AI笔记坊</h1>
           <p class="login-tagline">随时随地，AI 助力</p>
         </div>
         <form class="login-form" id="login-form" novalidate>
@@ -45,6 +61,10 @@ export function mountLoginPage(root, { onSuccess }) {
           <p id="login-error" class="login-error" aria-live="polite" hidden></p>
           <button id="login-submit" type="submit" class="btn-primary login-submit">登录</button>
         </form>
+        <button id="login-trial" type="button" class="login-trial" hidden>免费试用</button>
+        <p class="login-help">
+          <button type="button" id="login-help-link" class="login-help-link">帮助文档</button>
+        </p>
       </div>
     </div>
   `;
@@ -55,6 +75,15 @@ export function mountLoginPage(root, { onSuccess }) {
   const errorEl = root.querySelector("#login-error");
   const submitBtn = root.querySelector("#login-submit");
   const rememberInput = root.querySelector("#login-remember");
+  const trialBtn = root.querySelector("#login-trial");
+  const helpLink = root.querySelector("#login-help-link");
+
+  window.noteGen
+    .invoke("auth:trialStatus")
+    .then((status) => {
+      trialBtn.hidden = !status?.available;
+    })
+    .catch(() => {});
 
   window.noteGen
     .invoke("auth:savedCredentials")
@@ -116,6 +145,31 @@ export function mountLoginPage(root, { onSuccess }) {
       submitBtn.disabled = false;
       submitBtn.textContent = "登录";
     }
+  });
+
+  trialBtn.addEventListener("click", async () => {
+    showError("");
+    trialBtn.disabled = true;
+    trialBtn.textContent = "进入试用中…";
+
+    try {
+      const result = await window.noteGen.invoke("auth:startTrial");
+      if (!result.ok) {
+        showError(result.error || "试用开启失败，请稍后重试");
+        trialBtn.hidden = true;
+        return;
+      }
+      await onSuccess();
+    } catch (error) {
+      showError(error.message || "试用开启失败，请稍后重试");
+    } finally {
+      trialBtn.disabled = false;
+      trialBtn.textContent = "免费试用";
+    }
+  });
+
+  helpLink.addEventListener("click", () => {
+    getManual(root).open("login");
   });
 
   phoneInput.focus();
